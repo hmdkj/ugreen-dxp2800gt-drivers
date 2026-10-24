@@ -39,7 +39,13 @@
 #                    /proc/config.gz, or the running kernel's ikconfig)
 #   --apt-headers    install the headers deb from the appliance's apt sources
 #   --from-source    use the truenas/linux git tree instead of the headers
+#   --rebuild-image  rebuild the cached toolchain image (to pick up Debian
+#                    updates); otherwise it is built once and reused
 #   --keep           keep the container's work directory for debugging
+#
+# The compilers and libraries live in a local image,
+# ugreen-cs201x-build:<base image>, built on the first run and reused after
+# that, so later runs start in seconds instead of re-installing them.
 
 set -euo pipefail
 
@@ -51,6 +57,7 @@ IMAGE=
 CONFIG=
 MODE=
 KEEP=0
+REBUILD=0
 
 while [ $# -gt 0 ]; do
 	case $1 in
@@ -59,8 +66,9 @@ while [ $# -gt 0 ]; do
 	--config) CONFIG=$2; shift 2 ;;
 	--apt-headers) MODE=apt; shift ;;
 	--from-source) MODE=source; shift ;;
+	--rebuild-image) REBUILD=1; shift ;;
 	--keep) KEEP=1; shift ;;
-	-h|--help) sed -n '3,43p' "$0"; exit 0 ;;
+	-h|--help) sed -n '3,48p' "$0"; exit 0 ;;
 	*) echo "unknown option: $1" >&2; exit 2 ;;
 	esac
 done
@@ -143,15 +151,10 @@ HOSTKDIR=$3
 
 export DEBIAN_FRONTEND=noninteractive
 
-# Toolchain first, from the image's own Debian repositories. The appliance's
-# repositories are added afterwards, so that a broken or unreachable TrueNAS
-# repo cannot take the whole toolchain install down with it.
-apt-get update
-apt-get install -y --no-install-recommends build-essential bc bison flex \
-	libssl-dev libelf-dev kmod rsync ca-certificates
-
+# The toolchain is already in the image (see the outer script). The
+# appliance's apt repositories are only added for --apt-headers, after it,
+# so that a broken or unreachable TrueNAS repo cannot take it down.
 if [ "$MODE" = source ]; then
-	apt-get install -y --no-install-recommends git
 	# 6.12.15-production+truenas -> truenas/linux-6.12
 	branch="truenas/linux-$(echo "$KVER" | cut -d. -f1,2)"
 	echo "cloning $branch"
@@ -252,14 +255,29 @@ for mod in ugreen-cs201x ugreen-cs201x-leds; do
 done
 INNER
 
-echo "building for $KVER in $IMAGE (mode=$MODE)"
+# The toolchain goes into its own image so that docker caches it: installing
+# it takes minutes, the module build itself a few seconds.
+BUILD_IMAGE="ugreen-cs201x-build:$(echo "$IMAGE" | tr '/:' '--')"
+if [ "$REBUILD" = 1 ] || ! docker image inspect "$BUILD_IMAGE" >/dev/null 2>&1; then
+	echo "building the toolchain image $BUILD_IMAGE (first run only)"
+	docker build $([ "$REBUILD" = 1 ] && echo "--pull --no-cache") -t "$BUILD_IMAGE" - <<DOCKERFILE
+FROM $IMAGE
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \\
+		build-essential bc bison flex libssl-dev libelf-dev kmod rsync \\
+		ca-certificates git \\
+	&& rm -rf /var/lib/apt/lists/*
+DOCKERFILE
+fi
+
+echo "building for $KVER in $BUILD_IMAGE (mode=$MODE)"
 docker run --rm \
 	-v "$SRCDIR:/src:ro" \
 	-v "$WORK:/work:ro" \
 	-v "$SRCDIR/build/$KVER:/out" \
 	$([ "$MODE" = host ] && echo "-v /usr/src:/usr/src:ro") \
 	-w /build \
-	"$IMAGE" \
+	"$BUILD_IMAGE" \
 	bash /work/build.sh "$KVER" "$MODE" "$HOSTKDIR"
 
 echo

@@ -11,25 +11,34 @@
 #
 # The results land in build/<kernel-version>/ugreen-cs201x{,-leds}.ko
 #
-# Two ways to get something to compile against:
+# Three ways to get something to compile against, tried in this order:
 #
-#   headers (default)  install linux-headers-<kver> from the same apt
-#                      repositories the appliance itself uses, then run
-#                      "make modules_prepare" with the running kernel's
-#                      config, because the TrueNAS headers package is known
-#                      to ship without include/generated/autoconf.h.
+#   host headers       the appliance ships the headers of its running kernel
+#   (default)          (/lib/modules/<kver>/build -> /usr/src/linux-headers-*),
+#                      including Module.symvers. They are copied into the
+#                      container and prepared with the running kernel's config
+#                      ("make modules_prepare"), because they are known to
+#                      lack include/generated/autoconf.h. This is the only
+#                      mode that is guaranteed to match the running kernel.
+#
+#   --apt-headers      install linux-headers-<kver> from the same apt
+#                      repositories the appliance itself uses. TrueNAS does
+#                      not publish that package for every release.
 #
 #   --from-source      shallow-clone github.com/truenas/linux at the branch
 #                      matching the kernel version and prepare that instead.
-#                      Slower and bigger, but does not depend on the headers
-#                      package being usable.
+#                      The branch head is usually not the running kernel's
+#                      exact commit, and there is no Module.symvers, so the
+#                      module carries no symbol CRCs and a kernel built with
+#                      CONFIG_MODVERSIONS (TrueNAS) refuses it. Last resort.
 #
 # Options:
 #   --kver <ver>     kernel version to build for (default: uname -r)
 #   --image <img>    container image (default: debian:<host VERSION_CODENAME>)
 #   --config <file>  kernel config (default: /boot/config-<kver>, or
 #                    /proc/config.gz, or the running kernel's ikconfig)
-#   --from-source    use the truenas/linux git tree instead of the headers deb
+#   --apt-headers    install the headers deb from the appliance's apt sources
+#   --from-source    use the truenas/linux git tree instead of the headers
 #   --keep           keep the container's work directory for debugging
 
 set -euo pipefail
@@ -40,7 +49,7 @@ SRCDIR=$PWD
 KVER=$(uname -r)
 IMAGE=
 CONFIG=
-FROM_SOURCE=0
+MODE=
 KEEP=0
 
 while [ $# -gt 0 ]; do
@@ -48,14 +57,26 @@ while [ $# -gt 0 ]; do
 	--kver) KVER=$2; shift 2 ;;
 	--image) IMAGE=$2; shift 2 ;;
 	--config) CONFIG=$2; shift 2 ;;
-	--from-source) FROM_SOURCE=1; shift ;;
+	--apt-headers) MODE=apt; shift ;;
+	--from-source) MODE=source; shift ;;
 	--keep) KEEP=1; shift ;;
-	-h|--help) sed -n '3,33p' "$0"; exit 0 ;;
+	-h|--help) sed -n '3,43p' "$0"; exit 0 ;;
 	*) echo "unknown option: $1" >&2; exit 2 ;;
 	esac
 done
 
 die() { echo "error: $*" >&2; exit 1; }
+
+HOSTKDIR=$(readlink -f "/lib/modules/$KVER/build" 2>/dev/null || true)
+if [ -z "$MODE" ]; then
+	if [ -f "$HOSTKDIR/Module.symvers" ]; then
+		MODE=host
+	else
+		MODE=apt
+	fi
+fi
+[ "$MODE" != host ] || [ -f "$HOSTKDIR/Module.symvers" ] ||
+	die "no kernel headers for $KVER on this host (looked at /lib/modules/$KVER/build); use --apt-headers or --from-source"
 
 command -v docker >/dev/null || die "docker not found. On TrueNAS Community Edition it comes with Apps; enable Apps first, or run this script on another machine with --kver $KVER"
 
@@ -88,7 +109,7 @@ echo "using kernel config: $(wc -l < "$WORK/kconfig") lines"
 # The appliance's apt configuration is reused verbatim rather than guessing
 # repository URLs, which differ between TrueNAS releases.
 mkdir -p "$WORK/apt/sources.list.d" "$WORK/apt/keyrings"
-if [ "$FROM_SOURCE" = 0 ]; then
+if [ "$MODE" = apt ]; then
 	[ -f /etc/apt/sources.list ] && cp /etc/apt/sources.list "$WORK/apt/sources.list"
 	cp /etc/apt/sources.list.d/* "$WORK/apt/sources.list.d/" 2>/dev/null || true
 	cp /usr/share/keyrings/* "$WORK/apt/keyrings/" 2>/dev/null || true
@@ -117,7 +138,8 @@ cat > "$WORK/build.sh" <<'INNER'
 set -euo pipefail
 
 KVER=$1
-FROM_SOURCE=$2
+MODE=$2
+HOSTKDIR=$3
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -128,13 +150,21 @@ apt-get update
 apt-get install -y --no-install-recommends build-essential bc bison flex \
 	libssl-dev libelf-dev kmod rsync ca-certificates
 
-if [ "$FROM_SOURCE" = 1 ]; then
+if [ "$MODE" = source ]; then
 	apt-get install -y --no-install-recommends git
 	# 6.12.15-production+truenas -> truenas/linux-6.12
 	branch="truenas/linux-$(echo "$KVER" | cut -d. -f1,2)"
 	echo "cloning $branch"
 	git clone --depth 1 --branch "$branch" \
 		https://github.com/truenas/linux /kbuild
+	KDIR=/kbuild
+elif [ "$MODE" = host ]; then
+	# The appliance's own headers (mounted at /usr/src, read-only). Work on
+	# a copy: modules_prepare writes into the tree. -P keeps symlinks, which
+	# resolve inside the container because /usr/src is mounted at the same path.
+	echo "using the host's kernel headers from $HOSTKDIR"
+	mkdir /kbuild
+	cp -aP "$HOSTKDIR/." /kbuild/
 	KDIR=/kbuild
 else
 	cp -a /work/apt/sources.list /etc/apt/sources.list.d/truenas-host.list 2>/dev/null || true
@@ -169,7 +199,7 @@ make -C "$KDIR" olddefconfig
 make -C "$KDIR" modules_prepare
 
 MODPOST_WARN=
-if [ "$FROM_SOURCE" = 1 ]; then
+if [ "$MODE" != apt ]; then
 	# The branch head is not necessarily the exact running kernel, and
 	# EXTRAVERSION ("-production") is not in the config. vermagic must match
 	# the running kernel or insmod refuses the module, so pin the release.
@@ -179,10 +209,14 @@ if [ "$FROM_SOURCE" = 1 ]; then
 		echo "$KVER" > "$KDIR/include/config/kernel.release"
 		printf '#define UTS_RELEASE "%s"\n' "$KVER" > "$KDIR/include/generated/utsrelease.h"
 	fi
-	# A source tree has no Module.symvers (that needs a full kernel build),
-	# so modpost cannot resolve exported symbols. Treat that as a warning;
-	# the module then loads without CRC checks for those symbols.
-	[ -f "$KDIR/Module.symvers" ] || MODPOST_WARN=1
+fi
+# A bare source tree has no Module.symvers (that needs a full kernel build),
+# so modpost cannot resolve exported symbols. Treat that as a warning to get a
+# module at all, but such a module has no symbol CRCs and a CONFIG_MODVERSIONS
+# kernel will refuse to load it ("no symbol version for module_layout").
+if [ ! -f "$KDIR/Module.symvers" ]; then
+	MODPOST_WARN=1
+	echo "warning: no Module.symvers in $KDIR; the module will carry no symbol CRCs and a modversions kernel will reject it" >&2
 fi
 
 # Keep the source read-only: build in a copy.
@@ -197,14 +231,15 @@ for mod in ugreen-cs201x ugreen-cs201x-leds; do
 done
 INNER
 
-echo "building for $KVER in $IMAGE (from_source=$FROM_SOURCE)"
+echo "building for $KVER in $IMAGE (mode=$MODE)"
 docker run --rm \
 	-v "$SRCDIR:/src:ro" \
 	-v "$WORK:/work:ro" \
 	-v "$SRCDIR/build/$KVER:/out" \
+	$([ "$MODE" = host ] && echo "-v /usr/src:/usr/src:ro") \
 	-w /build \
 	"$IMAGE" \
-	bash /work/build.sh "$KVER" "$FROM_SOURCE"
+	bash /work/build.sh "$KVER" "$MODE" "$HOSTKDIR"
 
 echo
 echo "built: $SRCDIR/build/$KVER/ugreen-cs201x.ko"

@@ -230,18 +230,21 @@ git clone https://github.com/hmdkj/ugreen-dxp2800gt-drivers && cd ugreen-dxp2800
 ./scripts/build-in-docker.sh          # → build/$(uname -r)/ugreen-cs201x.ko
 ```
 
-このスクリプトは
+このスクリプトは、ビルドに使うカーネルヘッダを次の優先順位で選びます。
 
-1. appliance の `/etc/os-release` から Debian コードネームを取り、同じ `debian:<codename>` を使う
-2. appliance の `/etc/apt/sources.list*` と keyring をコンテナに持ち込み、
-   `linux-headers-$(uname -r)` を入れる
-3. TrueNAS のヘッダパッケージは `include/generated/autoconf.h` を含まない既知の問題があるため、
-   稼働カーネルの config（`/boot/config-$(uname -r)` か `/proc/config.gz`）を入れて
-   `make olddefconfig modules_prepare` を実行してから `M=` ビルドする
-
-という手順です。ヘッダが apt から取れない場合は
-`./scripts/build-in-docker.sh --from-source` で
-[truenas/linux](https://github.com/truenas/linux) の該当ブランチを shallow clone して使います。
+1. **appliance のヘッダ（既定）**: TrueNAS には稼働カーネルのヘッダが
+   `/lib/modules/$(uname -r)/build`（→ `/usr/src/linux-headers-*`）として入っています。
+   これを `/usr/src` ごとコンテナに読み取り専用で渡し、コピーして使います。
+   `Module.symvers` が含まれるので、稼働カーネルと完全に一致するモジュールができます。
+   ヘッダは `include/generated/autoconf.h` を含まない既知の問題があるため、稼働カーネルの config
+   （`/boot/config-$(uname -r)` か `/proc/config.gz`）を入れて
+   `make olddefconfig modules_prepare` を実行してから `M=` ビルドします。
+2. `--apt-headers`: appliance の `/etc/apt/sources.list*` と keyring をコンテナに持ち込み、
+   `linux-headers-$(uname -r)` を入れます（TrueNAS が全リリースで配布しているわけではありません）。
+3. `--from-source`: [truenas/linux](https://github.com/truenas/linux) の該当ブランチを
+   shallow clone して使います。**最後の手段**です。ブランチ先頭は稼働カーネルと同じコミットとは
+   限らず、`Module.symvers` も無いため、`CONFIG_MODVERSIONS` が有効な TrueNAS のカーネルでは
+   `no symbol version for module_layout` / `Invalid module format` で `insmod` に拒否されます。
 
 ### 一般的なディストリビューション
 

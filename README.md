@@ -37,6 +37,67 @@ UGREEN が GPL 義務で公開しているカーネルソース
 | iDX6011 / 6012 / 6011 Pro, DXP4800 GT | ITE IT55xx (ACPI EC 0x62/0x66) | 上流に相当ドライバなし。別途移植が必要 |
 | **DXP2800 GT** | **Chipsea CS201x** | **ここ** |
 
+## TrueNAS への導入手順（まとめ）
+
+すべて NAS 上で、管理者ユーザー（例: `truenas_admin`）として SSH ログインして行います。
+TrueNAS 25.04 以降は `root` での SSH ログインが既定で無効なので、特権が要る操作は `sudo` を付けます。
+
+**事前条件**
+
+- TrueNAS Community Edition 25.04 以降（Linux 6.11 以降）
+- データプールが 1 つ以上ある（モジュールをシステム更新で消えない場所に置くため）
+- Docker が使える（UI の **Apps** を有効化すると入ります。ビルドをコンテナ内で行うため）
+
+**手順**
+
+1. **取得**: リポジトリを clone します。置き場所はどこでも構いません（次の手順でプールへコピーします）。
+
+   ```sh
+   git clone https://github.com/hmdkj/ugreen-dxp2800gt-drivers
+   cd ugreen-dxp2800gt-drivers
+   ```
+
+2. **ビルド**: Docker コンテナ内で `.ko` を作ります。NAS のルート FS には何も入りません。
+
+   ```sh
+   sudo ./scripts/build-in-docker.sh     # → build/$(uname -r)/ に .ko が 2 つできる
+   ```
+
+3. **インストール**: ソース・スクリプト・`.ko` をプール上の `/mnt/<pool>/apps/ugreen-cs201x` にコピーします。
+   以降はそこにあるものを使います。
+
+   ```sh
+   sudo ./scripts/install-truenas.sh
+   ```
+
+4. **ファンカーブの確認**: `/mnt/<pool>/apps/ugreen-cs201x/contrib/fancontrol.conf.in` を開き、
+   `MINSTOP` / `MINSTART` を機体に合わせます（測り方は「ファンカーブの実測」）。
+
+5. **手動で一度実行**して動作を確かめます。
+
+   ```sh
+   sudo /mnt/<pool>/apps/ugreen-cs201x/scripts/ugreen-init.sh
+   ```
+
+   `fancontrol running` と出れば成功です。失敗した場合は同じ場所の `ugreen-init.log` と
+   `dmesg` を見てください。
+
+6. **起動時に自動実行**する設定を UI で登録します。
+
+   ```
+   System Settings → Advanced → Init/Shutdown Scripts → Add
+     Description: ugreen fan control
+     Type:        Command
+     Command:     /mnt/<pool>/apps/ugreen-cs201x/scripts/ugreen-init.sh
+     When:        Post Init
+   ```
+
+7. **再起動して確認**します。`ugreen-init.log` に新しい起動の記録があり、`fancontrol` が動いていれば完了です。
+
+**TrueNAS を更新したとき**はカーネルが変わるので、`.ko` の再ビルドが必要です
+（「カーネル更新時」を参照）。ビルドや動作がうまくいかない場合は
+`scripts/collect-hw-info.sh` で環境を確認できます。
+
 ## 公開される hwmon 属性
 
 `/sys/class/hwmon/hwmonN/`（`name` は `ugreen_cs201x`）:
@@ -146,9 +207,6 @@ TrueNAS のカーネルでは `ledtrig-netdev` はモジュールで、`ledtrig-
 対象カーネルは Linux 6.11 以降です（`platform_driver` の `.remove` が `void` を返す API を使うため）。
 TrueNAS 25.10 は 6.12 LTS なので問題ありません。
 
-> 25.04 以降の TrueNAS は、既定では `root` での SSH ログインが無効です。管理者ユーザー
-> （例: `truenas_admin`）でログインし、`sudo` で実行してください。
-
 TrueNAS のルート FS は読み取り専用かつシステム更新で作り直されるため、
 **appliance 上で apt を叩かず、Docker コンテナ内でビルドして `.ko` だけ取り出します**。
 
@@ -183,19 +241,15 @@ DKMS の状態が残らないためです。
 
 ## インストール（TrueNAS Community Edition）
 
+全体の流れは先頭の「TrueNAS への導入手順（まとめ）」を参照してください。ここは補足です。
+
 ```sh
-./scripts/install-truenas.sh          # 既定: /mnt/<pool>/apps/ugreen-cs201x
+./scripts/install-truenas.sh [target-dir]   # 既定: /mnt/<最初のデータプール>/apps/ugreen-cs201x
 ```
 
 プール上のデータセットに配置します（`/lib/modules` に置くとシステム更新で消えます）。
-そのあと UI で起動時実行を登録します。
-
-```
-System Settings → Advanced → Init/Shutdown Scripts → Add
-  Type:    Command
-  Command: /mnt/<pool>/apps/ugreen-cs201x/scripts/ugreen-init.sh
-  When:    Post Init
-```
+引数で配置先を変えられます。ビルド済みの `.ko` があれば一緒にコピーされます。
+起動時実行の登録（Init/Shutdown Scripts）はまとめの手順 6 のとおりです。
 
 `ugreen-init.sh` は insmod → hwmon デバイスの発見 → `fancontrol` 設定の生成 →
 `fancontrol` 起動までを行い、ログを `ugreen-init.log` に残します。

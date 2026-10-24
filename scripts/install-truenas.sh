@@ -6,7 +6,7 @@
 #
 #   ./scripts/install-truenas.sh [target-dir]
 #
-# Default target: /mnt/<first pool>/apps/ugreen-fan
+# Default target: /mnt/<first pool>/apps/ugreen-cs201x
 
 set -euo pipefail
 
@@ -18,7 +18,7 @@ TARGET=${1:-}
 if [ -z "$TARGET" ]; then
 	pool=$(zpool list -Ho name 2>/dev/null | grep -v '^boot-pool$' | head -1)
 	[ -n "$pool" ] || { echo "no data pool found; pass a target directory" >&2; exit 1; }
-	TARGET="/mnt/$pool/apps/ugreen-fan"
+	TARGET="/mnt/$pool/apps/ugreen-cs201x"
 fi
 
 [ "$(readlink -f "$TARGET")" != "$SRCDIR" ] || { echo "target is the source directory" >&2; exit 1; }
@@ -51,13 +51,13 @@ Installed. Remaining steps:
    (see README.md, "Measuring the fan curve").
 
 2. Try it once by hand:
-     $TARGET/scripts/ugreen-fan-init.sh
+     $TARGET/scripts/ugreen-init.sh
 
 3. Make it survive reboots:
      TrueNAS UI -> System Settings -> Advanced -> Init/Shutdown Scripts -> Add
        Description: ugreen fan control
        Type:        Command
-       Command:     $TARGET/scripts/ugreen-fan-init.sh
+       Command:     $TARGET/scripts/ugreen-init.sh
        When:        Post Init
 
 After every TrueNAS update the kernel changes and the module must be

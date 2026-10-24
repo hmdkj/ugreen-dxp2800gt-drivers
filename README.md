@@ -99,7 +99,7 @@ UGREEN が GPL 義務で公開しているカーネルソース
 EC の I/O ウィンドウとロックは `ugreen-cs201x` が持ち、LED 用モジュールは auxiliary bus
 （`ugreen_cs201x.leds`）経由でそれを借ります。LED モジュールは I/O ポートに直接触れず、
 アクセスできる EC アドレスも LED のブロックだけに限られます（ファンのレジスタには届きません）。
-そのため、**先に `ugreen-cs201x` をロードしてください**（`ugreen-fan-init.sh` はその順で行います）。
+そのため、**先に `ugreen-cs201x` をロードしてください**（`ugreen-init.sh` はその順で行います）。
 
 LED は **multicolor LED クラス**として `/sys/class/leds/` に現れます。
 
@@ -184,7 +184,7 @@ DKMS の状態が残らないためです。
 ## インストール（TrueNAS Community Edition）
 
 ```sh
-./scripts/install-truenas.sh          # 既定: /mnt/<pool>/apps/ugreen-fan
+./scripts/install-truenas.sh          # 既定: /mnt/<pool>/apps/ugreen-cs201x
 ```
 
 プール上のデータセットに配置します（`/lib/modules` に置くとシステム更新で消えます）。
@@ -193,13 +193,16 @@ DKMS の状態が残らないためです。
 ```
 System Settings → Advanced → Init/Shutdown Scripts → Add
   Type:    Command
-  Command: /mnt/<pool>/apps/ugreen-fan/scripts/ugreen-fan-init.sh
+  Command: /mnt/<pool>/apps/ugreen-cs201x/scripts/ugreen-init.sh
   When:    Post Init
 ```
 
-`ugreen-fan-init.sh` は insmod → hwmon デバイスの発見 → `fancontrol` 設定の生成 →
-`fancontrol` 起動までを行い、ログを `ugreen-fan-init.log` に残します。
+`ugreen-init.sh` は insmod → hwmon デバイスの発見 → `fancontrol` 設定の生成 →
+`fancontrol` 起動までを行い、ログを `ugreen-init.log` に残します。
 **現在のカーネル用の `.ko` が無ければ意図的に失敗します**（古い `.ko` を無理に入れない）。
+
+> 旧名 `apps/ugreen-fan` / `ugreen-fan-init.sh` からの移行: Post Init のコマンドを上記の新しいパスに
+> 書き換えてください。
 
 ### ファン制御（fancontrol）
 
@@ -209,7 +212,7 @@ lm-sensors が入っていないため、スクリプト本体を `contrib/fanco
 
 hwmon の番号（`hwmon0`, `hwmon3`, …）は起動ごとに変わるので、設定は
 `contrib/fancontrol.conf.in` をテンプレートとして持ち、起動時に実際のパスへ展開して
-`/run/ugreen-fan/fancontrol.conf` を作ります。**編集するのはテンプレート側**です。
+`/run/ugreen-cs201x/fancontrol.conf` を作ります。**編集するのはテンプレート側**です。
 
 ディスク温度も見たい場合は `drivetemp` モジュール（SATA ドライブの温度を hwmon に出す）を
 ロードし、`FCTEMPS` にそのパスを足してください。
@@ -267,16 +270,16 @@ grep -i cs201x /proc/ioports; rmmod ugreen_cs201x; grep -i cs201x /proc/ioports
   誤って弱めないよう `-ENODATA` を返します。
 - **DXP2800 GT のファン本数**: ドライバは 2 チャネル出しますが、実機で片方の
   ヘッダが未実装なら `fanN_input` が 0 rpm になります。その場合はテンプレートから
-  該当 pwm を削ってください（`ugreen-fan-init.sh` が警告を出します）。
+  該当 pwm を削ってください（`ugreen-init.sh` が警告を出します）。
 
 ## カーネル更新時
 
 TrueNAS を更新するとカーネル ABI が変わるため、`.ko` を作り直す必要があります。
 
 ```sh
-cd /mnt/<pool>/apps/ugreen-fan
+cd /mnt/<pool>/apps/ugreen-cs201x
 ./scripts/build-in-docker.sh
-./scripts/ugreen-fan-init.sh
+./scripts/ugreen-init.sh
 ```
 
 再ビルドまでの間、Post-Init は失敗し、ファンは EC 既定の挙動に戻ります

@@ -6,7 +6,7 @@
 #
 #   System Settings -> Advanced -> Init/Shutdown Scripts -> Add
 #     Type: Command
-#     Command: /mnt/<pool>/apps/ugreen-fan/scripts/ugreen-fan-init.sh
+#     Command: /mnt/<pool>/apps/ugreen-cs201x/scripts/ugreen-init.sh
 #     When: Post Init
 #
 # Everything it needs lives next to it, on a pool dataset, because the
@@ -23,8 +23,8 @@ KVER=$(uname -r)
 KO="$BASE/build/$KVER/ugreen-cs201x.ko"
 CONF_IN="$BASE/contrib/fancontrol.conf.in"
 FANCONTROL="$BASE/contrib/fancontrol"
-CONF=/run/ugreen-fan/fancontrol.conf
-LOG="$BASE/ugreen-fan-init.log"
+CONF=/run/ugreen-cs201x/fancontrol.conf
+LOG="$BASE/ugreen-init.log"
 
 log() { printf '%s %s\n' "$(date -Is)" "$*" | tee -a "$LOG" >&2; }
 die() { log "ERROR: $*"; exit 1; }

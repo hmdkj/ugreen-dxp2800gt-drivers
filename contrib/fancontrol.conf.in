@@ -1,6 +1,6 @@
 # fancontrol configuration template for the UGREEN DXP2800 GT.
 #
-# scripts/ugreen-fan-init.sh renders this file at boot, replacing
+# scripts/ugreen-init.sh renders this file at boot, replacing
 #   @HWMON@    with the hwmon directory name of the ugreen_cs201x device
 #              (hwmon0, hwmon3, ... - the number is not stable across boots,
 #               which is why this is a template and not a static config)

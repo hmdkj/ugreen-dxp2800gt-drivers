@@ -204,6 +204,10 @@ if [ -f "$KDIR/include/generated/autoconf.h" ] && [ -f "$KDIR/include/config/aut
 	echo "headers are already configured; skipping olddefconfig"
 	cp /work/kconfig "$KDIR/.config"
 	touch -d 2000-01-01 "$KDIR/.config"
+	# auto.conf.cmd (the list of Kconfig files auto.conf depends on) is
+	# also missing, and Kbuild would run syncconfig to make it. An empty one
+	# is a valid "no dependencies" file.
+	[ -e "$KDIR/include/config/auto.conf.cmd" ] || : > "$KDIR/include/config/auto.conf.cmd"
 else
 	cp /work/kconfig "$KDIR/.config"
 	make -C "$KDIR" olddefconfig

@@ -1,0 +1,40 @@
+# fancontrol configuration template for the UGREEN DXP2800 GT.
+#
+# scripts/ugreen-fan-init.sh renders this file at boot, replacing
+#   @HWMON@    with the hwmon directory name of the ugreen_cs201x device
+#              (hwmon0, hwmon3, ... - the number is not stable across boots,
+#               which is why this is a template and not a static config)
+#   @DEVPATH@  with the device path fancontrol validates against
+#
+# Everything else is meant to be edited by hand. All pwm values are 0-255;
+# the EC only has 1 % resolution, so ~2.5 pwm steps per percent.
+#
+# pwm1/fan1/temp1 = CPU fan and CPU NTC
+# pwm2/fan2/temp2 = system fan and board NTC
+# If your machine only populates one of the two fan headers, delete the
+# entries for the missing one from every line below.
+
+INTERVAL=10
+
+DEVPATH=@HWMON@=@DEVPATH@
+DEVNAME=@HWMON@=ugreen_cs201x
+
+FCTEMPS=@HWMON@/pwm1=@HWMON@/temp1_input @HWMON@/pwm2=@HWMON@/temp2_input
+FCFANS=@HWMON@/pwm1=@HWMON@/fan1_input @HWMON@/pwm2=@HWMON@/fan2_input
+
+# Below MINTEMP the fan runs at MINPWM, above MAXTEMP at MAXPWM,
+# and it interpolates linearly in between.
+MINTEMP=@HWMON@/pwm1=40 @HWMON@/pwm2=35
+MAXTEMP=@HWMON@/pwm1=70 @HWMON@/pwm2=55
+
+# MINSTART: pwm needed to spin a stopped fan back up.
+# MINSTOP:  lowest pwm at which the fan keeps turning.
+# Both must be measured on the actual machine - see README.md. The values
+# here are deliberately conservative (loud rather than hot).
+MINSTART=@HWMON@/pwm1=90 @HWMON@/pwm2=90
+MINSTOP=@HWMON@/pwm1=60 @HWMON@/pwm2=60
+
+# MINPWM > 0 keeps the fans turning at all times. A NAS with spinning disks
+# should never let them stop completely.
+MINPWM=@HWMON@/pwm1=60 @HWMON@/pwm2=60
+MAXPWM=@HWMON@/pwm1=255 @HWMON@/pwm2=255

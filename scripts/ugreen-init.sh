@@ -60,6 +60,22 @@ if [ -f "$KO_LEDS" ] && ! lsmod | grep -q '^ugreen_cs201x_leds'; then
 	fi
 fi
 
+# Blink the disk LEDs on disk activity. The kernel trigger is one global
+# "any disk" signal, so both LEDs follow all disks together. Same rule as
+# above: never stop the fan setup over this.
+for led in /sys/class/leds/ugreen:rgb:disk-1 /sys/class/leds/ugreen:rgb:disk-2; do
+	[ -e "$led/trigger" ] || continue
+	if ! grep -qw disk-activity "$led/trigger"; then
+		log "WARNING: no disk-activity trigger for $led (CONFIG_LEDS_TRIGGER_DISK missing?)"
+		break
+	fi
+	if echo disk-activity > "$led/trigger" 2>>"$LOG"; then
+		log "$(basename "$led"): trigger disk-activity"
+	else
+		log "WARNING: cannot set disk-activity on $led"
+	fi
+done
+
 # ------------------------------------------------------------- find the hwmon
 
 HWMON_DIR=

@@ -191,11 +191,23 @@ fi
 
 [ -d "$KDIR" ] || { echo "no kernel build tree at $KDIR" >&2; exit 1; }
 
-# The TrueNAS headers package ships without include/generated/autoconf.h,
-# which makes any out-of-tree build fail with "Kernel configuration is
-# invalid". Regenerate the generated files from the running kernel's config.
-cp /work/kconfig "$KDIR/.config"
-make -C "$KDIR" olddefconfig
+# Some TrueNAS headers ship without include/generated/autoconf.h, which makes
+# any out-of-tree build fail with "Kernel configuration is invalid". Then
+# regenerate the generated files from the running kernel's config. Newer ones
+# are already configured (and have no kconfig tools); see below.
+if [ -f "$KDIR/include/generated/autoconf.h" ] && [ -f "$KDIR/include/config/auto.conf" ] &&
+   [ ! -f "$KDIR/scripts/kconfig/Makefile" ]; then
+	# The appliance's headers are already configured but carry neither
+	# .config nor the kconfig tools, so "make olddefconfig" cannot run. Kbuild
+	# still insists on a .config; give it one that is older than auto.conf so
+	# it does not try to regenerate the generated files.
+	echo "headers are already configured; skipping olddefconfig"
+	cp /work/kconfig "$KDIR/.config"
+	touch -d 2000-01-01 "$KDIR/.config"
+else
+	cp /work/kconfig "$KDIR/.config"
+	make -C "$KDIR" olddefconfig
+fi
 make -C "$KDIR" modules_prepare
 
 MODPOST_WARN=

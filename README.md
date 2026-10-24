@@ -1,9 +1,11 @@
 # ugreen-cs201x
 
-UGREEN NASync **DXP2800 GT** のファン／温度センサを標準の Linux **hwmon** として
-公開する out-of-tree カーネルモジュールと、TrueNAS Community Edition 用の導入スクリプト。
+UGREEN NASync **DXP2800 GT** のファン／温度センサを標準の Linux **hwmon**、前面の ARGB LED を
+標準の **LED クラス**として公開する out-of-tree カーネルモジュールと、
+TrueNAS Community Edition 用の導入スクリプト。
 
-> *An out-of-tree hwmon driver for the Chipsea CS201x EC found in the UGREEN
+> *Out-of-tree hwmon (fans, temperatures) and LED class (front panel ARGB LEDs)
+> drivers for the Chipsea CS201x EC found in the UGREEN
 > NASync DXP2800 GT, packaged for TrueNAS Community Edition (formerly
 > TrueNAS SCALE). Requires Linux 6.11 or later. Derived from UGREEN's GPL
 > kernel release. Documentation is in Japanese; the code and its comments are
@@ -23,7 +25,8 @@ UGREEN が GPL 義務で公開しているカーネルソース
   `sensors` / `fancontrol` / TrueNAS のレポート画面からは一切見えない
 - ARGB LED (`leds-sio-201x.c`) と `extern` で相互参照しており単体ビルド不可
 
-そこでファンと温度の部分だけを切り出し、hwmon ABI で公開し直したのがこのリポジトリです。
+そこでファンと温度の部分を切り出して hwmon ABI で公開し直し、LED は別モジュールに移植して
+LED クラスで公開したのがこのリポジトリです。
 
 ## 対象機種
 
@@ -89,7 +92,7 @@ TrueNAS 25.04 以降は `root` での SSH ログインが既定で無効なの�
 
    ```
    System Settings → Advanced → Init/Shutdown Scripts → Add
-     Description: ugreen fan control
+     Description: ugreen fan and LED control
      Type:        Command
      Command:     /mnt/<pool>/apps/ugreen-cs201x/scripts/ugreen-init.sh
      When:        Post Init
@@ -274,8 +277,8 @@ bash ./scripts/install-truenas.sh [target-dir]   # 既定: /mnt/<最初のデー
 引数で配置先を変えられます。ビルド済みの `.ko` があれば一緒にコピーされます。
 起動時実行の登録（Init/Shutdown Scripts）はまとめの手順 6 のとおりです。
 
-`ugreen-init.sh` は insmod → hwmon デバイスの発見 → `fancontrol` 設定の生成 →
-`fancontrol` 起動までを行い、ログを `ugreen-init.log` に残します。
+`ugreen-init.sh` は insmod（ファン／温度用と LED 用の 2 モジュール）→ disk LED の消灯 →
+hwmon デバイスの発見 → `fancontrol` 設定の生成 → `fancontrol` 起動までを行い、ログを `ugreen-init.log` に残します。
 **現在のカーネル用の `.ko` が無ければ意図的に失敗します**（古い `.ko` を無理に入れない）。
 
 > 旧名 `apps/ugreen-fan` / `ugreen-fan-init.sh` からの移行: Post Init のコマンドを上記の新しいパスに

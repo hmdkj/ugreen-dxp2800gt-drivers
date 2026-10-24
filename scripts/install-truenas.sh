@@ -55,13 +55,13 @@ Installed. Remaining steps:
 
 3. Make it survive reboots:
      TrueNAS UI -> System Settings -> Advanced -> Init/Shutdown Scripts -> Add
-       Description: ugreen fan control
+       Description: ugreen fan and LED control
        Type:        Command
        Command:     $TARGET/scripts/ugreen-init.sh
        When:        Post Init
 
 After every TrueNAS update the kernel changes and the module must be
 rebuilt with scripts/build-in-docker.sh. Until then the Post-Init script
-fails loudly instead of loading a mismatched module, and the fans fall back
-to whatever the EC does on its own.
+fails loudly instead of loading a mismatched module, the fans fall back to
+whatever the EC does on its own, and the LEDs keep the EC's default state.
 EOF

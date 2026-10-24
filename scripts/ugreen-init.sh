@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# Load ugreen-cs201x and start fancontrol. Meant to be registered as a
+# Load ugreen-cs201x (fans, temperatures) and ugreen-cs201x-leds (front panel
+# LEDs), then start fancontrol. Meant to be registered as a
 # TrueNAS Community Edition Post-Init command:
 #
 #   System Settings -> Advanced -> Init/Shutdown Scripts -> Add

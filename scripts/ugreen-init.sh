@@ -79,7 +79,7 @@ done
 # value (0-255) to make it brighter. Same rule as above: never stop the fan
 # setup over this.
 POWER_LED=/sys/class/leds/ugreen:rgb:power
-POWER_LED_RGB="0 10 0"
+POWER_LED_RGB="0 3 0"
 if [ -e "$POWER_LED/trigger" ]; then
 	if echo none > "$POWER_LED/trigger" 2>>"$LOG" &&
 	   echo "$POWER_LED_RGB" > "$POWER_LED/multi_intensity" 2>>"$LOG" &&

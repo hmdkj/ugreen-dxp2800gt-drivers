@@ -31,10 +31,11 @@ MAXTEMP=@HWMON@/pwm1=75 @HWMON@/pwm2=55
 # MINSTOP:  lowest pwm at which the fan keeps turning.
 # Both must be measured on the actual machine - see README.md. Measured here:
 # fan1 never stops down to pwm 20 (1067 rpm); fan2 stops at pwm 20 and is at
-# 197 rpm at 30. MINSTOP keeps a margin above those. Idle temperatures were
-# about 46 C (temp1) and 42 C (temp2), so MINTEMP sits a few degrees above.
+# 197 rpm at 30. MINSTOP keeps a margin above those, and fancontrol requires
+# MINSTOP >= MINPWM. Idle temperatures were about 46 C (temp1) and 42 C
+# (temp2), so MINTEMP sits a few degrees above.
 MINSTART=@HWMON@/pwm1=40 @HWMON@/pwm2=60
-MINSTOP=@HWMON@/pwm1=25 @HWMON@/pwm2=40
+MINSTOP=@HWMON@/pwm1=30 @HWMON@/pwm2=40
 
 # MINPWM > 0 keeps the fans turning at all times. A NAS with spinning disks
 # should never let them stop completely.

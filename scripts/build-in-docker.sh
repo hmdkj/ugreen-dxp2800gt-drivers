@@ -113,10 +113,10 @@ export DEBIAN_FRONTEND=noninteractive
 # repo cannot take the whole toolchain install down with it.
 apt-get update
 apt-get install -y --no-install-recommends build-essential bc bison flex \
-	libssl-dev libelf-dev kmod rsync
+	libssl-dev libelf-dev kmod rsync ca-certificates
 
 if [ "$FROM_SOURCE" = 1 ]; then
-	apt-get install -y --no-install-recommends git ca-certificates
+	apt-get install -y --no-install-recommends git
 	# 6.12.15-production+truenas -> truenas/linux-6.12
 	branch="truenas/linux-$(echo "$KVER" | cut -d. -f1,2)"
 	echo "cloning $branch"

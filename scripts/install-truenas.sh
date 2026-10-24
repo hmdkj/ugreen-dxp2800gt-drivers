@@ -4,7 +4,7 @@
 # Copy this project onto a pool dataset so it survives TrueNAS updates, then
 # print what to register in the UI.
 #
-#   ./scripts/install-truenas.sh [target-dir]
+#   bash ./scripts/install-truenas.sh [target-dir]
 #
 # Default target: /mnt/<first pool>/apps/ugreen-cs201x
 
@@ -38,7 +38,7 @@ if [ -f "$SRCDIR/build/$KVER/ugreen-cs201x.ko" ]; then
 else
 	echo
 	echo "note: no module built for $KVER yet. On the NAS run:"
-	echo "  $TARGET/scripts/build-in-docker.sh"
+	echo "  sudo bash $TARGET/scripts/build-in-docker.sh"
 fi
 
 cat <<EOF
@@ -51,7 +51,7 @@ Installed. Remaining steps:
    (see README.md, "Measuring the fan curve").
 
 2. Try it once by hand:
-     $TARGET/scripts/ugreen-init.sh
+     sudo bash $TARGET/scripts/ugreen-init.sh
 
 3. Make it survive reboots:
      TrueNAS UI -> System Settings -> Advanced -> Init/Shutdown Scripts -> Add

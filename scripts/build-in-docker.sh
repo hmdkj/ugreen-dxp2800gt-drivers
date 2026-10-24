@@ -7,7 +7,7 @@
 #
 # Run this ON THE NAS (TrueNAS Community Edition ships Docker for its Apps feature):
 #
-#     ./scripts/build-in-docker.sh
+#     bash ./scripts/build-in-docker.sh
 #
 # The results land in build/<kernel-version>/ugreen-cs201x{,-leds}.ko
 #

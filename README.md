@@ -50,6 +50,9 @@ TrueNAS 25.04 以降は `root` での SSH ログインが既定で無効なの�
 
 **手順**
 
+スクリプトは `bash` を付けて実行します（ホームディレクトリなどが `noexec` でマウントされていると、
+`./scripts/...` の直接実行は `Permission denied` になるためです）。
+
 1. **取得**: リポジトリを clone します。置き場所はどこでも構いません（次の手順でプールへコピーします）。
 
    ```sh
@@ -60,14 +63,14 @@ TrueNAS 25.04 以降は `root` での SSH ログインが既定で無効なの�
 2. **ビルド**: Docker コンテナ内で `.ko` を作ります。NAS のルート FS には何も入りません。
 
    ```sh
-   sudo ./scripts/build-in-docker.sh     # → build/$(uname -r)/ に .ko が 2 つできる
+   sudo bash ./scripts/build-in-docker.sh     # → build/$(uname -r)/ に .ko が 2 つできる
    ```
 
 3. **インストール**: ソース・スクリプト・`.ko` をプール上の `/mnt/<pool>/apps/ugreen-cs201x` にコピーします。
    以降はそこにあるものを使います。
 
    ```sh
-   sudo ./scripts/install-truenas.sh
+   sudo bash ./scripts/install-truenas.sh
    ```
 
 4. **ファンカーブの確認**: `/mnt/<pool>/apps/ugreen-cs201x/contrib/fancontrol.conf.in` を開き、
@@ -76,7 +79,7 @@ TrueNAS 25.04 以降は `root` での SSH ログインが既定で無効なの�
 5. **手動で一度実行**して動作を確かめます。
 
    ```sh
-   sudo /mnt/<pool>/apps/ugreen-cs201x/scripts/ugreen-init.sh
+   sudo bash /mnt/<pool>/apps/ugreen-cs201x/scripts/ugreen-init.sh
    ```
 
    `fancontrol running` と出れば成功です。失敗した場合は同じ場所の `ugreen-init.log` と
@@ -229,7 +232,7 @@ TrueNAS のルート FS は読み取り専用かつシステム更新で作り�
 
 ```sh
 git clone https://github.com/hmdkj/ugreen-dxp2800gt-drivers && cd ugreen-dxp2800gt-drivers
-./scripts/build-in-docker.sh          # → build/$(uname -r)/ugreen-cs201x.ko
+bash ./scripts/build-in-docker.sh          # → build/$(uname -r)/ugreen-cs201x.ko
 ```
 
 このスクリプトは、ビルドに使うカーネルヘッダを次の優先順位で選びます。
@@ -264,7 +267,7 @@ DKMS の状態が残らないためです。
 全体の流れは先頭の「TrueNAS への導入手順（まとめ）」を参照してください。ここは補足です。
 
 ```sh
-./scripts/install-truenas.sh [target-dir]   # 既定: /mnt/<最初のデータプール>/apps/ugreen-cs201x
+bash ./scripts/install-truenas.sh [target-dir]   # 既定: /mnt/<最初のデータプール>/apps/ugreen-cs201x
 ```
 
 プール上のデータセットに配置します（`/lib/modules` に置くとシステム更新で消えます）。
@@ -352,8 +355,8 @@ TrueNAS を更新するとカーネル ABI が変わるため、`.ko` を作り�
 
 ```sh
 cd /mnt/<pool>/apps/ugreen-cs201x
-./scripts/build-in-docker.sh
-./scripts/ugreen-init.sh
+bash ./scripts/build-in-docker.sh
+bash ./scripts/ugreen-init.sh
 ```
 
 再ビルドまでの間、Post-Init は失敗し、ファンは EC 既定の挙動に戻ります

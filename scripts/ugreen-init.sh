@@ -75,11 +75,11 @@ for led in /sys/class/leds/ugreen:rgb:disk-1 /sys/class/leds/ugreen:rgb:disk-2; 
 	fi
 done
 
-# Power LED: steady, dim blue so it is not glaring at night. Raise the blue
+# Power LED: steady, dim green so it is not glaring at night. Raise the green
 # value (0-255) to make it brighter. Same rule as above: never stop the fan
 # setup over this.
 POWER_LED=/sys/class/leds/ugreen:rgb:power
-POWER_LED_RGB="0 0 40"
+POWER_LED_RGB="0 10 0"
 if [ -e "$POWER_LED/trigger" ]; then
 	if echo none > "$POWER_LED/trigger" 2>>"$LOG" &&
 	   echo "$POWER_LED_RGB" > "$POWER_LED/multi_intensity" 2>>"$LOG" &&

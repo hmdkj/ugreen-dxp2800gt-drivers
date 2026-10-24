@@ -97,13 +97,15 @@ if [ "$FROM_SOURCE" = 0 ]; then
 	# signed-by=, wherever it lives (kept at the same absolute path).
 	mkdir -p "$WORK/apt/trusted.gpg.d" "$WORK/apt/extra"
 	cp /etc/apt/trusted.gpg.d/* "$WORK/apt/trusted.gpg.d/" 2>/dev/null || true
-	[ -f /etc/apt/trusted.gpg ] && cp /etc/apt/trusted.gpg "$WORK/apt/trusted.gpg.d/host-trusted.gpg"
-	grep -hoiE 'signed-by[=:] *[^] ]+' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null |
+	# "|| true": grep exits 1 when nothing matches, which pipefail + set -e
+	# would turn into a silent exit.
+	{ grep -hoiE 'signed-by[=:] *[^] ]+' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null || true; } |
 		sed -E 's/^[^=:]*[=:] *//' | sort -u | while read -r keyfile; do
 		[ -f "$keyfile" ] || continue
 		mkdir -p "$WORK/apt/extra$(dirname "$keyfile")"
 		cp "$keyfile" "$WORK/apt/extra$keyfile"
 	done
+	[ ! -f /etc/apt/trusted.gpg ] || cp /etc/apt/trusted.gpg "$WORK/apt/trusted.gpg.d/host-trusted.gpg"
 	if [ -z "$(ls -A "$WORK/apt/sources.list.d")" ] && [ ! -s "$WORK/apt/sources.list" ]; then
 		die "no apt sources found on this host; run with --from-source instead"
 	fi
@@ -166,10 +168,27 @@ cp /work/kconfig "$KDIR/.config"
 make -C "$KDIR" olddefconfig
 make -C "$KDIR" modules_prepare
 
+MODPOST_WARN=
+if [ "$FROM_SOURCE" = 1 ]; then
+	# The branch head is not necessarily the exact running kernel, and
+	# EXTRAVERSION ("-production") is not in the config. vermagic must match
+	# the running kernel or insmod refuses the module, so pin the release.
+	built=$(cat "$KDIR/include/config/kernel.release")
+	if [ "$built" != "$KVER" ]; then
+		echo "warning: source tree is $built, running kernel is $KVER; forcing the release string to $KVER" >&2
+		echo "$KVER" > "$KDIR/include/config/kernel.release"
+		printf '#define UTS_RELEASE "%s"\n' "$KVER" > "$KDIR/include/generated/utsrelease.h"
+	fi
+	# A source tree has no Module.symvers (that needs a full kernel build),
+	# so modpost cannot resolve exported symbols. Treat that as a warning;
+	# the module then loads without CRC checks for those symbols.
+	[ -f "$KDIR/Module.symvers" ] || MODPOST_WARN=1
+fi
+
 # Keep the source read-only: build in a copy.
 mkdir -p /build
 cp /src/ugreen-cs201x.c /src/ugreen-cs201x-leds.c /src/ugreen-cs201x.h /src/Makefile /build/
-make -C "$KDIR" M=/build W=1 modules
+KBUILD_MODPOST_WARN=$MODPOST_WARN make -C "$KDIR" M=/build W=1 modules
 
 for mod in ugreen-cs201x ugreen-cs201x-leds; do
 	strip --strip-debug "/build/$mod.ko"

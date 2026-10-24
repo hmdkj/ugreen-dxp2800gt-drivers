@@ -178,8 +178,8 @@ make check           # W=1 付き
 sudo make install    # modules_install + depmod
 ```
 
-DKMS 用の `dkms.conf` も置いてあります（Debian / Proxmox 等向け。TrueNAS では
-ルート FS が更新で入れ替わるため DKMS の状態は残りません）。
+DKMS 用の設定ファイルは用意していません。TrueNAS ではルート FS が更新で入れ替わり、
+DKMS の状態が残らないためです。
 
 ## インストール（TrueNAS Community Edition）
 

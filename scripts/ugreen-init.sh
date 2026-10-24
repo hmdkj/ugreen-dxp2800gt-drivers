@@ -60,19 +60,17 @@ if [ -f "$KO_LEDS" ] && ! lsmod | grep -q '^ugreen_cs201x_leds'; then
 	fi
 fi
 
-# Blink the disk LEDs on disk activity. The kernel trigger is one global
-# "any disk" signal, so both LEDs follow all disks together. Same rule as
-# above: never stop the fan setup over this.
+# Keep the disk LEDs dark: their activity blinking is too bright for a room.
+# The driver already leaves them off at probe; this also drops a trigger set
+# earlier (e.g. by hand) when the module was already loaded. For the old
+# behaviour, echo disk-activity into their "trigger" files (see README.md).
+# Same rule as above: never stop the fan setup over this.
 for led in /sys/class/leds/ugreen:rgb:disk-1 /sys/class/leds/ugreen:rgb:disk-2; do
 	[ -e "$led/trigger" ] || continue
-	if ! grep -qw disk-activity "$led/trigger"; then
-		log "WARNING: no disk-activity trigger for $led (CONFIG_LEDS_TRIGGER_DISK missing?)"
-		break
-	fi
-	if echo disk-activity > "$led/trigger" 2>>"$LOG"; then
-		log "$(basename "$led"): trigger disk-activity"
+	if echo none > "$led/trigger" 2>>"$LOG" && echo 0 > "$led/brightness" 2>>"$LOG"; then
+		log "$(basename "$led"): off"
 	else
-		log "WARNING: cannot set disk-activity on $led"
+		log "WARNING: cannot turn off $led"
 	fi
 done
 

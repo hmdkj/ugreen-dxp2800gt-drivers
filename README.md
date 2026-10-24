@@ -191,17 +191,19 @@ echo 1 > $L/link; echo 1 > $L/tx; echo 1 > $L/rx
 
 ### ディスクアクセスに連動させる
 
-`ugreen-init.sh` が、起動時に `disk-1` / `disk-2` のトリガーを `disk-activity` に設定します。
-手動なら次のとおりです。
+点滅が眩しいため、`ugreen-init.sh` は **disk LED を消灯のままにします**（`trigger` を `none`、
+`brightness` を 0 にします）。ディスクアクセスに連動させたい場合は、手動で次のように設定します
+（再起動すると消灯に戻ります。常時連動させたいなら `ugreen-init.sh` の該当ブロックを書き換えてください）。
 
 ```sh
 for n in 1 2; do echo disk-activity > /sys/class/leds/ugreen:rgb:disk-$n/trigger; done
 ```
 
+明るさを落として使う場合は、`multi_intensity` を暗い色にします（例: `echo "0 40 0" > .../multi_intensity`）。
+
 カーネルのトリガーは「どれかのディスクにアクセスがあった」という 1 つの信号なので、
 **どのディスクにアクセスしても 2 つの LED が一緒に点滅します**（ディスクごとには光りません）。
 常駐プロセスは不要で、負荷はほぼゼロです。対象は libata 経由のディスクで、NVMe は連動しません。
-カーネルに `CONFIG_LEDS_TRIGGER_DISK` が無い場合は、ログに警告を出してスキップします。
 色は LED の `multi_intensity`（既定は白）に従います。
 
 TrueNAS のカーネルでは `ledtrig-netdev` はモジュールで、`ledtrig-blkdev` は含まれていません。

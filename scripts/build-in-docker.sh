@@ -93,6 +93,17 @@ if [ "$FROM_SOURCE" = 0 ]; then
 	cp /etc/apt/sources.list.d/* "$WORK/apt/sources.list.d/" 2>/dev/null || true
 	cp /usr/share/keyrings/* "$WORK/apt/keyrings/" 2>/dev/null || true
 	cp /etc/apt/keyrings/* "$WORK/apt/keyrings/" 2>/dev/null || true
+	# Keys apt trusts globally, and any key a source pins with Signed-By /
+	# signed-by=, wherever it lives (kept at the same absolute path).
+	mkdir -p "$WORK/apt/trusted.gpg.d" "$WORK/apt/extra"
+	cp /etc/apt/trusted.gpg.d/* "$WORK/apt/trusted.gpg.d/" 2>/dev/null || true
+	[ -f /etc/apt/trusted.gpg ] && cp /etc/apt/trusted.gpg "$WORK/apt/trusted.gpg.d/host-trusted.gpg"
+	grep -hoiE 'signed-by[=:] *[^] ]+' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null |
+		sed -E 's/^[^=:]*[=:] *//' | sort -u | while read -r keyfile; do
+		[ -f "$keyfile" ] || continue
+		mkdir -p "$WORK/apt/extra$(dirname "$keyfile")"
+		cp "$keyfile" "$WORK/apt/extra$keyfile"
+	done
 	if [ -z "$(ls -A "$WORK/apt/sources.list.d")" ] && [ ! -s "$WORK/apt/sources.list" ]; then
 		die "no apt sources found on this host; run with --from-source instead"
 	fi
@@ -128,6 +139,9 @@ else
 	cp -a /work/apt/sources.list.d/. /etc/apt/sources.list.d/ 2>/dev/null || true
 	mkdir -p /usr/share/keyrings
 	cp -a /work/apt/keyrings/. /usr/share/keyrings/ 2>/dev/null || true
+	mkdir -p /etc/apt/trusted.gpg.d
+	cp -a /work/apt/trusted.gpg.d/. /etc/apt/trusted.gpg.d/ 2>/dev/null || true
+	cp -a /work/apt/extra/. / 2>/dev/null || true
 
 	# A repository we have no key for must not abort the run; the install
 	# below is what decides whether this mode can work.

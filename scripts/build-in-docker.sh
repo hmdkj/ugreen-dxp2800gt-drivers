@@ -195,13 +195,15 @@ fi
 # any out-of-tree build fail with "Kernel configuration is invalid". Then
 # regenerate the generated files from the running kernel's config. Newer ones
 # are already configured (and have no kconfig tools); see below.
+PREPARED=0
 if [ -f "$KDIR/include/generated/autoconf.h" ] && [ -f "$KDIR/include/config/auto.conf" ] &&
    [ ! -f "$KDIR/scripts/kconfig/Makefile" ]; then
 	# The appliance's headers are already configured but carry neither
 	# .config nor the kconfig tools, so "make olddefconfig" cannot run. Kbuild
 	# still insists on a .config; give it one that is older than auto.conf so
 	# it does not try to regenerate the generated files.
-	echo "headers are already configured; skipping olddefconfig"
+	echo "headers are already configured; skipping olddefconfig and modules_prepare"
+	PREPARED=1
 	cp /work/kconfig "$KDIR/.config"
 	touch -d 2000-01-01 "$KDIR/.config"
 	# auto.conf.cmd (the list of Kconfig files auto.conf depends on) is
@@ -212,7 +214,10 @@ else
 	cp /work/kconfig "$KDIR/.config"
 	make -C "$KDIR" olddefconfig
 fi
-make -C "$KDIR" modules_prepare
+# modules_prepare also runs archheaders, which needs arch/*/entry/syscalls/
+# Makefile and the like; those are stripped from the appliance's headers,
+# whose generated files are all there already.
+[ "$PREPARED" = 1 ] || make -C "$KDIR" modules_prepare
 
 MODPOST_WARN=
 if [ "$MODE" != apt ]; then

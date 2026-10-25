@@ -80,26 +80,6 @@ load_module() {
 	log "loaded $KO"
 }
 
-# Entries of /proc/ioports inside the EC window 0x200-0x20f that are not ours
-# (at the time of writing: "pnp 00:03" at 0x200-0x207, the firmware's
-# reservation). While one is there, the driver cannot claim the window and
-# its probe fails with -EBUSY.
-window_holders() {
-	grep -iE '^ *020[0-9a-f]-' /proc/ioports 2>/dev/null | grep -v 'ugreen-cs201x' | tr -s ' \n' ' '
-}
-
-wait_for_window() {
-	local i holders
-	for i in $(seq 1 120); do
-		holders=$(window_holders)
-		[ -z "$holders" ] && { [ "$i" -eq 1 ] || log "EC window free after $((i - 1))s"; return 0; }
-		[ "$i" -ne 1 ] || log "EC window 0x200-0x20f is held by: $holders; waiting up to 120s for it to be released"
-		sleep 1
-	done
-	log "WARNING: still held after 120s by: $holders; loading anyway"
-}
-
-wait_for_window
 load_module
 
 # ------------------------------------------------------------------ the LEDs

@@ -22,9 +22,10 @@
  * driver; the differences are:
  *
  *  - hwmon registration instead of procfs
- *  - the EC I/O window is claimed with devm_request_region() and checked
- *    against ACPI reservations (the vendor driver claims only 0x2e/0x2f,
- *    and even talks to the EC after having released that region)
+ *  - the EC I/O window is claimed with devm_request_region() where the
+ *    firmware has not reserved it already, and checked against ACPI
+ *    reservations (the vendor driver claims only 0x2e/0x2f, and even talks
+ *    to the EC after having released that region)
  *  - DMI product-name match in addition to the Super I/O chip ID, so the
  *    module cannot poke 0x2e on an unrelated machine
  *  - readings are cached for HZ/2 (hwmon reads one attribute per file, so
@@ -485,10 +486,16 @@ static int ugreen_cs201x_probe(struct platform_device *pdev)
 	if (!res)
 		return -ENODEV;
 
-	if (!devm_request_region(dev, res->start, resource_size(res), DRVNAME)) {
-		dev_err(dev, "failed to claim EC I/O window %pR\n", res);
-		return -EBUSY;
-	}
+	/*
+	 * The firmware may already reserve part of the window as a motherboard
+	 * resource ("pnp 00:03" at 0x200-0x207 on the DXP2800 GT, which stays
+	 * for good), which makes the claim fail with -EBUSY. The vendor driver
+	 * never claims the window either, and init has already checked it
+	 * against the ACPI reservations, so carry on without owning it.
+	 */
+	if (!devm_request_region(dev, res->start, resource_size(res), DRVNAME))
+		dev_warn(dev, "EC I/O window %pR is reserved by someone else, using it anyway\n",
+			 res);
 
 	data = devm_kzalloc(dev, sizeof(*data), GFP_KERNEL);
 	if (!data)

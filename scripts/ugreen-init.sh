@@ -41,7 +41,7 @@ log "starting (kernel $KVER, base $BASE)"
 # Start from a clean slate so that running this script twice gives the same
 # result: stop a fancontrol we started earlier (it restores the fans to full
 # speed on SIGTERM, and the new instance takes over from there) and unload
-# the module, including the LED half of the old two-module build.
+# the module.
 if [ -f /run/fancontrol.pid ]; then
 	oldpid=$(cat /run/fancontrol.pid)
 	if kill -0 "$oldpid" 2>/dev/null; then
@@ -55,12 +55,10 @@ if [ -f /run/fancontrol.pid ]; then
 	rm -f /run/fancontrol.pid
 fi
 
-for mod in ugreen_cs201x_leds ugreen_cs201x; do
-	if lsmod | grep -q "^$mod "; then
-		rmmod "$mod" 2>>"$LOG" || die "cannot unload $mod (see $LOG)"
-		log "unloaded $mod"
-	fi
-done
+if lsmod | grep -q '^ugreen_cs201x '; then
+	rmmod ugreen_cs201x 2>>"$LOG" || die "cannot unload ugreen_cs201x (see $LOG)"
+	log "unloaded ugreen_cs201x"
+fi
 
 find_hwmon() {
 	local d
@@ -73,36 +71,19 @@ find_hwmon() {
 	return 1
 }
 
-load_module() {
-	# The LEDs are multicolor LED class devices; the module depends on it.
-	modprobe -q led-class-multicolor 2>>"$LOG" || true
-	insmod "$KO" 2>>"$LOG" || die "insmod $KO failed (see $LOG and dmesg)"
-	log "loaded $KO"
-}
-
-load_module
+# The LEDs are multicolor LED class devices; the module depends on it.
+modprobe -q led-class-multicolor 2>>"$LOG" || true
+insmod "$KO" 2>>"$LOG" || die "insmod $KO failed (see $LOG and dmesg)"
+log "loaded $KO"
 
 # ------------------------------------------------------------------ the LEDs
 #
 # Optional: a failure here is logged but never stops the fan setup below.
 
-# Keep the disk LEDs dark: their activity blinking is too bright for a room.
-# The driver already leaves them off at probe; this also drops a trigger set
-# earlier (e.g. by hand) when the module was already loaded. For the old
-# behaviour, echo disk-activity into their "trigger" files (see README.md).
-# Same rule as above: never stop the fan setup over this.
-for led in /sys/class/leds/ugreen:rgb:disk-1 /sys/class/leds/ugreen:rgb:disk-2; do
-	[ -e "$led/trigger" ] || continue
-	if echo none > "$led/trigger" 2>>"$LOG" && echo 0 > "$led/brightness" 2>>"$LOG"; then
-		log "$(basename "$led"): off"
-	else
-		log "WARNING: cannot turn off $led"
-	fi
-done
-
 # Power LED: steady, dim green so it is not glaring at night. Raise the green
-# value (0-255) to make it brighter. Same rule as above: never stop the fan
-# setup over this.
+# value (0-255) to make it brighter. The disk LEDs are left as the driver
+# sets them: dark (see README.md to link them to disk activity). Never stop
+# the fan setup over this.
 POWER_LED=/sys/class/leds/ugreen:rgb:power
 POWER_LED_RGB="0 3 0"
 if [ -e "$POWER_LED/trigger" ]; then
@@ -117,7 +98,7 @@ fi
 
 # ------------------------------------------------------------- find the hwmon
 
-HWMON_DIR=$(find_hwmon) || die "the module is loaded but no hwmon device named ugreen_cs201x appeared (see dmesg and /proc/ioports)"
+HWMON_DIR=$(find_hwmon) || die "the module is loaded but no hwmon device named ugreen_cs201x appeared (see dmesg)"
 
 HWMON=$(basename "$HWMON_DIR")
 DEVPATH=$(readlink -f "$HWMON_DIR/device" | sed -e 's|^/sys/||')

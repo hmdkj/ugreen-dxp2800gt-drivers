@@ -448,18 +448,6 @@ static bool ugreen_cs201x_led_addr_ok(u32 addr)
 	return addr >= EC_LED_FIRST && addr <= EC_LED_LAST;
 }
 
-int ugreen_cs201x_ec_led_read(struct ugreen_cs201x_data *data, u32 addr, u8 *val)
-{
-	if (!ugreen_cs201x_led_addr_ok(addr))
-		return -EINVAL;
-
-	mutex_lock(&data->lock);
-	*val = ec_read_byte(data, addr);
-	mutex_unlock(&data->lock);
-
-	return 0;
-}
-
 int ugreen_cs201x_ec_led_write(struct ugreen_cs201x_data *data, u32 addr, u8 val)
 {
 	if (!ugreen_cs201x_led_addr_ok(addr))

@@ -5,7 +5,7 @@
  * The four ARGB LEDs (power, LAN, disk1, disk2) are driven by the same
  * Chipsea CS201x EC as the fans. The EC window and its lock belong to
  * ugreen-cs201x-core.c; this file is linked into the same module and reaches
- * the EC only through ugreen_cs201x_ec_led_{read,write}(), never through the
+ * the EC only through ugreen_cs201x_ec_led_write(), never through the
  * I/O ports.
  *
  * Derived from drivers/ugreen/ug_201x.c (ArgbRgbSet/ArgbLightSet/ArgbModeSet)

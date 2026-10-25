@@ -140,8 +140,9 @@ TrueNAS 25.04 以降は `root` での SSH ログインが既定で無効なの�
 
 - procfs ではなく hwmon (`devm_hwmon_device_register_with_info`) で公開
 - **EC の I/O ウィンドウを `devm_request_region()` で確保**し、`acpi_check_resource_conflict()`
-  で ACPI の予約と衝突しないか確認する（ベンダ版は `0x2e/0x2f` しか確保せず、しかも
-  `release_region()` した後に EC を叩いている）
+  で ACPI の予約と衝突しないか確認する。ファームウェアが先に予約している場合（DXP2800 GT では
+  `pnp 00:03` が 0x200–0x207 を恒久的に持つ）は、警告を出してそのまま使う
+  （ベンダ版は `0x2e/0x2f` しか確保せず、しかも `release_region()` した後に EC を叩いている）
 - チップ ID に加えて **DMI の product name も照合**（ベンダ版はチップ ID だけを見るので、
   他機種で `0x2e` を叩く余地がある）
 - 読み値を `HZ/2` キャッシュ（hwmon は属性 1 個ずつ read されるため、素通しだと
@@ -199,9 +200,9 @@ echo 1 > $L/link; echo 1 > $L/tx; echo 1 > $L/rx
 
 ### ディスクアクセスに連動させる
 
-点滅が眩しいため、`ugreen-init.sh` は **disk LED を消灯のままにします**（`trigger` を `none`、
-`brightness` を 0 にします）。ディスクアクセスに連動させたい場合は、手動で次のように設定します
-（再起動すると消灯に戻ります。常時連動させたいなら `ugreen-init.sh` の該当ブロックを書き換えてください）。
+点滅が眩しいため、ドライバは **disk LED を消灯のままにします**（`ugreen-init.sh` も何もしません）。
+ディスクアクセスに連動させたい場合は、手動で次のように設定します
+（再起動すると消灯に戻ります。常時連動させたいなら `ugreen-init.sh` の電源 LED の設定の後に同じ行を足してください）。
 
 ```sh
 for n in 1 2; do echo disk-activity > /sys/class/leds/ugreen:rgb:disk-$n/trigger; done
@@ -280,7 +281,7 @@ bash ./scripts/install-truenas.sh [target-dir]   # 既定: /mnt/<最初のデー
 起動時実行の登録（Init/Shutdown Scripts）はまとめの手順 6 のとおりです。
 
 `ugreen-init.sh` は何度実行しても同じ状態になります。先に fancontrol とモジュールを止めて外し（rmmod）、
-insmod → disk LED の消灯 →
+insmod → 電源 LED の設定 →
 hwmon デバイスの発見 → `fancontrol` 設定の生成 → `fancontrol` 起動までを行い、ログを `ugreen-init.log` に残します。
 **現在のカーネル用の `.ko` が無ければ意図的に失敗します**（古い `.ko` を無理に入れない）。
 

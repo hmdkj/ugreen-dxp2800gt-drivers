@@ -140,8 +140,6 @@ if [ "$MODE" = apt ]; then
 fi
 
 mkdir -p "$SRCDIR/build/$KVER"
-# Left over from when the LEDs were a module of their own.
-rm -f "$SRCDIR/build/$KVER/ugreen-cs201x-leds.ko"
 
 cat > "$WORK/build.sh" <<'INNER'
 set -euo pipefail

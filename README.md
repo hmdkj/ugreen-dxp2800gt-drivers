@@ -279,7 +279,8 @@ bash ./scripts/install-truenas.sh [target-dir]   # 既定: /mnt/<最初のデー
 引数で配置先を変えられます。ビルド済みの `.ko` があれば一緒にコピーされます。
 起動時実行の登録（Init/Shutdown Scripts）はまとめの手順 6 のとおりです。
 
-`ugreen-init.sh` は insmod → disk LED の消灯 →
+`ugreen-init.sh` は何度実行しても同じ状態になります。先に fancontrol とモジュールを止めて外し（rmmod）、
+insmod → disk LED の消灯 →
 hwmon デバイスの発見 → `fancontrol` 設定の生成 → `fancontrol` 起動までを行い、ログを `ugreen-init.log` に残します。
 **現在のカーネル用の `.ko` が無ければ意図的に失敗します**（古い `.ko` を無理に入れない）。
 

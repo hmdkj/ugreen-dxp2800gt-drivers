@@ -34,11 +34,33 @@ log "starting (kernel $KVER, base $BASE)"
 
 # ---------------------------------------------------------------- the module
 
-# The module used to be split in two; the LED half cannot stay loaded.
-if lsmod | grep -q '^ugreen_cs201x_leds '; then
-	{ rmmod ugreen_cs201x_leds && rmmod ugreen_cs201x; } 2>>"$LOG" ||
-		die "cannot unload the old two-module build (see $LOG); reboot"
+# Refuse before touching anything, so a missing build does not take down a
+# setup that is working.
+[ -f "$KO" ] || die "no module for this kernel: $KO not found. Rebuild with scripts/build-in-docker.sh"
+
+# Start from a clean slate so that running this script twice gives the same
+# result: stop a fancontrol we started earlier (it restores the fans to full
+# speed on SIGTERM, and the new instance takes over from there) and unload
+# the module, including the LED half of the old two-module build.
+if [ -f /run/fancontrol.pid ]; then
+	oldpid=$(cat /run/fancontrol.pid)
+	if kill -0 "$oldpid" 2>/dev/null; then
+		log "stopping previous fancontrol (pid $oldpid)"
+		kill -TERM "$oldpid" 2>/dev/null
+		for _ in 1 2 3 4 5; do
+			kill -0 "$oldpid" 2>/dev/null || break
+			sleep 1
+		done
+	fi
+	rm -f /run/fancontrol.pid
 fi
+
+for mod in ugreen_cs201x_leds ugreen_cs201x; do
+	if lsmod | grep -q "^$mod "; then
+		rmmod "$mod" 2>>"$LOG" || die "cannot unload $mod (see $LOG)"
+		log "unloaded $mod"
+	fi
+done
 
 find_hwmon() {
 	local d
@@ -54,7 +76,6 @@ find_hwmon() {
 load_module() {
 	# The LEDs are multicolor LED class devices; the module depends on it.
 	modprobe -q led-class-multicolor 2>>"$LOG" || true
-	[ -f "$KO" ] || die "no module for this kernel: $KO not found. Rebuild with scripts/build-in-docker.sh"
 	insmod "$KO" 2>>"$LOG" || die "insmod $KO failed (see $LOG and dmesg)"
 	log "loaded $KO"
 }
@@ -78,20 +99,8 @@ wait_for_window() {
 	log "WARNING: still held after 120s by: $holders; loading anyway"
 }
 
-if lsmod | grep -q '^ugreen_cs201x '; then
-	if ! find_hwmon >/dev/null; then
-		# Loaded earlier but its probe failed; start over with a free window.
-		log "ugreen_cs201x is loaded without a hwmon device; unloading it"
-		rmmod ugreen_cs201x 2>>"$LOG" || die "cannot unload ugreen_cs201x (see $LOG)"
-	else
-		log "ugreen_cs201x already loaded"
-	fi
-fi
-
-if ! lsmod | grep -q '^ugreen_cs201x '; then
-	wait_for_window
-	load_module
-fi
+wait_for_window
+load_module
 
 # ------------------------------------------------------------------ the LEDs
 #
@@ -151,21 +160,6 @@ done
 
 [ -f "$CONF_IN" ] || die "$CONF_IN not found"
 [ -x "$FANCONTROL" ] || die "$FANCONTROL not found or not executable"
-
-# Stop a fancontrol we started earlier; it restores the fans to full speed
-# on SIGTERM, and the new instance takes over from there.
-if [ -f /run/fancontrol.pid ]; then
-	oldpid=$(cat /run/fancontrol.pid)
-	if kill -0 "$oldpid" 2>/dev/null; then
-		log "stopping previous fancontrol (pid $oldpid)"
-		kill -TERM "$oldpid" 2>/dev/null
-		for _ in 1 2 3 4 5; do
-			kill -0 "$oldpid" 2>/dev/null || break
-			sleep 1
-		done
-	fi
-	rm -f /run/fancontrol.pid
-fi
 
 mkdir -p "$(dirname "$CONF")"
 sed -e "s|@HWMON@|$HWMON|g" -e "s|@DEVPATH@|$DEVPATH|g" "$CONF_IN" > "$CONF"

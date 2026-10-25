@@ -40,17 +40,57 @@ if lsmod | grep -q '^ugreen_cs201x_leds '; then
 		die "cannot unload the old two-module build (see $LOG); reboot"
 fi
 
-if ! lsmod | grep -q '^ugreen_cs201x '; then
+find_hwmon() {
+	local d
+	for d in /sys/class/hwmon/hwmon*; do
+		if [ -r "$d/name" ] && [ "$(cat "$d/name")" = "ugreen_cs201x" ]; then
+			echo "$d"
+			return 0
+		fi
+	done
+	return 1
+}
+
+load_module() {
 	# The LEDs are multicolor LED class devices; the module depends on it.
 	modprobe -q led-class-multicolor 2>>"$LOG" || true
 	[ -f "$KO" ] || die "no module for this kernel: $KO not found. Rebuild with scripts/build-in-docker.sh"
-
-	if ! insmod "$KO" 2>>"$LOG"; then
-		die "insmod $KO failed (see $LOG and dmesg)"
-	fi
+	insmod "$KO" 2>>"$LOG" || die "insmod $KO failed (see $LOG and dmesg)"
 	log "loaded $KO"
-else
-	log "ugreen_cs201x already loaded"
+}
+
+# Entries of /proc/ioports inside the EC window 0x200-0x20f that are not ours
+# (at the time of writing: "pnp 00:03" at 0x200-0x207, the firmware's
+# reservation). While one is there, the driver cannot claim the window and
+# its probe fails with -EBUSY.
+window_holders() {
+	grep -iE '^ *020[0-9a-f]-' /proc/ioports 2>/dev/null | grep -v 'ugreen-cs201x' | tr -s ' \n' ' '
+}
+
+wait_for_window() {
+	local i holders
+	for i in $(seq 1 120); do
+		holders=$(window_holders)
+		[ -z "$holders" ] && { [ "$i" -eq 1 ] || log "EC window free after $((i - 1))s"; return 0; }
+		[ "$i" -ne 1 ] || log "EC window 0x200-0x20f is held by: $holders; waiting up to 120s for it to be released"
+		sleep 1
+	done
+	log "WARNING: still held after 120s by: $holders; loading anyway"
+}
+
+if lsmod | grep -q '^ugreen_cs201x '; then
+	if ! find_hwmon >/dev/null; then
+		# Loaded earlier but its probe failed; start over with a free window.
+		log "ugreen_cs201x is loaded without a hwmon device; unloading it"
+		rmmod ugreen_cs201x 2>>"$LOG" || die "cannot unload ugreen_cs201x (see $LOG)"
+	else
+		log "ugreen_cs201x already loaded"
+	fi
+fi
+
+if ! lsmod | grep -q '^ugreen_cs201x '; then
+	wait_for_window
+	load_module
 fi
 
 # ------------------------------------------------------------------ the LEDs
@@ -88,14 +128,7 @@ fi
 
 # ------------------------------------------------------------- find the hwmon
 
-HWMON_DIR=
-for d in /sys/class/hwmon/hwmon*; do
-	if [ -r "$d/name" ] && [ "$(cat "$d/name")" = "ugreen_cs201x" ]; then
-		HWMON_DIR=$d
-		break
-	fi
-done
-[ -n "$HWMON_DIR" ] || die "the module is loaded but no hwmon device named ugreen_cs201x appeared"
+HWMON_DIR=$(find_hwmon) || die "the module is loaded but no hwmon device named ugreen_cs201x appeared (see dmesg and /proc/ioports)"
 
 HWMON=$(basename "$HWMON_DIR")
 DEVPATH=$(readlink -f "$HWMON_DIR/device" | sed -e 's|^/sys/||')

@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * ugreen-cs201x - hwmon driver for the Chipsea CS201x Super I/O / EC
- *		   as found in the UGREEN NASync DXP2800 GT.
+ * ugreen-cs201x - hwmon and front panel LED driver for the Chipsea CS201x
+ *		   Super I/O / EC as found in the UGREEN NASync DXP2800 GT.
+ *
+ * This file owns the EC I/O window and its lock and exports the fans and
+ * temperatures; the LEDs are in ugreen-cs201x-leds.c, linked into the same
+ * module.
  *
  * Derived from drivers/ugreen/ug_201x.c of UGREEN's GPL kernel release
  *   https://github.com/ugreen-opensource/kernel-6.12
@@ -25,7 +29,8 @@
  *    module cannot poke 0x2e on an unrelated machine
  *  - readings are cached for HZ/2 (hwmon reads one attribute per file, so
  *    an uncached "sensors" run would issue a dozen EC transactions)
- *  - all state is per-device and static; no global symbols
+ *  - all state is per-device and static; the only non-static symbols are the
+ *    ugreen_cs201x_* entry points shared with the LED code
  *  - vendor's ug_msleep() is dropped: it compiles to a no-op unless
  *    CONFIG_UG_FEAT_MSLEEP is defined, and that config exists neither in
  *    the vendor Kconfig nor in ug_x86_64_defconfig, so the shipping UGOS
@@ -33,7 +38,6 @@
  */
 
 #include <linux/acpi.h>
-#include <linux/auxiliary_bus.h>
 #include <linux/delay.h>
 #include <linux/dmi.h>
 #include <linux/hwmon.h>
@@ -88,7 +92,7 @@
 /*
  * The ARGB LED block, as far as the vendor driver uses it: 4 channels with
  * mode/light/period/duty bytes at 0x...00-0x...0f, flow control at 0x...40 and
- * three colour bytes per channel at 0x...44-0x...52. ugreen-cs201x-leds may
+ * three colour bytes per channel at 0x...44-0x...52. the LED code may
  * only access this range; the fan and temperature registers are below it.
  */
 #define EC_LED_FIRST		0x20005400u
@@ -436,17 +440,15 @@ static const struct hwmon_chip_info ugreen_cs201x_chip_info = {
 	.info = ugreen_cs201x_hwmon_info,
 };
 
-/* ------------------------------------------------- EC access for the LED module */
+/* ------------------------------------------------------- EC access for the LEDs */
 
 static bool ugreen_cs201x_led_addr_ok(u32 addr)
 {
 	return addr >= EC_LED_FIRST && addr <= EC_LED_LAST;
 }
 
-static int ugreen_cs201x_led_ec_read(struct device *ecdev, u32 addr, u8 *val)
+int ugreen_cs201x_ec_led_read(struct ugreen_cs201x_data *data, u32 addr, u8 *val)
 {
-	struct ugreen_cs201x_data *data = dev_get_drvdata(ecdev);
-
 	if (!ugreen_cs201x_led_addr_ok(addr))
 		return -EINVAL;
 
@@ -457,10 +459,8 @@ static int ugreen_cs201x_led_ec_read(struct device *ecdev, u32 addr, u8 *val)
 	return 0;
 }
 
-static int ugreen_cs201x_led_ec_write(struct device *ecdev, u32 addr, u8 val)
+int ugreen_cs201x_ec_led_write(struct ugreen_cs201x_data *data, u32 addr, u8 val)
 {
-	struct ugreen_cs201x_data *data = dev_get_drvdata(ecdev);
-
 	if (!ugreen_cs201x_led_addr_ok(addr))
 		return -EINVAL;
 
@@ -469,59 +469,6 @@ static int ugreen_cs201x_led_ec_write(struct device *ecdev, u32 addr, u8 val)
 	mutex_unlock(&data->lock);
 
 	return 0;
-}
-
-static const struct ugreen_cs201x_ec_ops ugreen_cs201x_led_ec_ops = {
-	.read = ugreen_cs201x_led_ec_read,
-	.write = ugreen_cs201x_led_ec_write,
-};
-
-static void ugreen_cs201x_aux_release(struct device *dev)
-{
-	struct ugreen_cs201x_aux_device *aux =
-		container_of(to_auxiliary_dev(dev), struct ugreen_cs201x_aux_device, adev);
-
-	kfree(aux);
-}
-
-static void ugreen_cs201x_aux_unregister(void *arg)
-{
-	struct ugreen_cs201x_aux_device *aux = arg;
-
-	auxiliary_device_delete(&aux->adev);
-	auxiliary_device_uninit(&aux->adev);
-}
-
-/* Publish the LED block of the EC to ugreen-cs201x-leds, if it is loaded. */
-static int ugreen_cs201x_add_led_aux(struct device *dev)
-{
-	struct ugreen_cs201x_aux_device *aux;
-	int ret;
-
-	aux = kzalloc(sizeof(*aux), GFP_KERNEL);
-	if (!aux)
-		return -ENOMEM;
-
-	aux->adev.name = UGREEN_CS201X_AUX_LEDS_NAME;
-	aux->adev.id = 0;
-	aux->adev.dev.parent = dev;
-	aux->adev.dev.release = ugreen_cs201x_aux_release;
-	aux->ecdev = dev;
-	aux->ops = &ugreen_cs201x_led_ec_ops;
-
-	ret = auxiliary_device_init(&aux->adev);
-	if (ret) {
-		kfree(aux);
-		return ret;
-	}
-
-	ret = auxiliary_device_add(&aux->adev);
-	if (ret) {
-		auxiliary_device_uninit(&aux->adev);	/* frees aux */
-		return ret;
-	}
-
-	return devm_add_action_or_reset(dev, ugreen_cs201x_aux_unregister, aux);
 }
 
 /* ---------------------------------------------------------- platform driver */
@@ -580,11 +527,8 @@ static int ugreen_cs201x_probe(struct platform_device *pdev)
 	dev_info(dev, "CS201x EC at %#x, hwmon: %s\n", data->ec_base,
 		 dev_name(hwmon_dev));
 
-	/*
-	 * The LEDs are optional: the fans must keep working if the auxiliary
-	 * device cannot be created.
-	 */
-	ret = ugreen_cs201x_add_led_aux(dev);
+	/* The LEDs are optional: the fans must keep working without them. */
+	ret = ugreen_cs201x_leds_init(dev, data);
 	if (ret)
 		dev_warn(dev, "LED interface unavailable: %d\n", ret);
 
@@ -741,6 +685,6 @@ static void __exit ugreen_cs201x_exit(void)
 module_init(ugreen_cs201x_init);
 module_exit(ugreen_cs201x_exit);
 
-MODULE_AUTHOR("Derived from UGREEN's ug_201x.c by Jason.Li <lijiang@ugreen.com>");
-MODULE_DESCRIPTION("hwmon driver for the Chipsea CS201x EC in the UGREEN DXP2800 GT");
+MODULE_AUTHOR("Derived from UGREEN's ug_201x.c and leds-sio-201x.c by Jason.Li <lijiang@ugreen.com>");
+MODULE_DESCRIPTION("hwmon and front panel LED driver for the Chipsea CS201x EC in the UGREEN DXP2800 GT");
 MODULE_LICENSE("GPL v2");

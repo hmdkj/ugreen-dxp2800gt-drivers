@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# Build ugreen-cs201x.ko and ugreen-cs201x-leds.ko for a TrueNAS Community
-# Edition kernel inside a container, so
-# that nothing is installed onto the appliance's root filesystem.
+# Build ugreen-cs201x.ko for a TrueNAS Community Edition kernel inside a
+# container, so that nothing is installed onto the appliance's root filesystem.
 #
 # Run this ON THE NAS (TrueNAS Community Edition ships Docker for its Apps feature):
 #
 #     bash ./scripts/build-in-docker.sh
 #
-# The results land in build/<kernel-version>/ugreen-cs201x{,-leds}.ko
+# The results land in build/<kernel-version>/ugreen-cs201x.ko
 #
 # Three ways to get something to compile against, tried in this order:
 #
@@ -141,6 +140,8 @@ if [ "$MODE" = apt ]; then
 fi
 
 mkdir -p "$SRCDIR/build/$KVER"
+# Left over from when the LEDs were a module of their own.
+rm -f "$SRCDIR/build/$KVER/ugreen-cs201x-leds.ko"
 
 cat > "$WORK/build.sh" <<'INNER'
 set -euo pipefail
@@ -245,14 +246,12 @@ fi
 
 # Keep the source read-only: build in a copy.
 mkdir -p /build
-cp /src/ugreen-cs201x.c /src/ugreen-cs201x-leds.c /src/ugreen-cs201x.h /src/Makefile /build/
+cp /src/ugreen-cs201x-core.c /src/ugreen-cs201x-leds.c /src/ugreen-cs201x.h /src/Makefile /build/
 KBUILD_MODPOST_WARN=$MODPOST_WARN make -C "$KDIR" M=/build W=1 modules
 
-for mod in ugreen-cs201x ugreen-cs201x-leds; do
-	strip --strip-debug "/build/$mod.ko"
-	modinfo "/build/$mod.ko"
-	cp "/build/$mod.ko" "/out/$mod.ko"
-done
+strip --strip-debug /build/ugreen-cs201x.ko
+modinfo /build/ugreen-cs201x.ko
+cp /build/ugreen-cs201x.ko /out/ugreen-cs201x.ko
 INNER
 
 # The toolchain goes into its own image so that docker caches it: installing
@@ -282,4 +281,3 @@ docker run --rm \
 
 echo
 echo "built: $SRCDIR/build/$KVER/ugreen-cs201x.ko"
-echo "built: $SRCDIR/build/$KVER/ugreen-cs201x-leds.ko"

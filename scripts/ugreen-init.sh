@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# Load ugreen-cs201x (fans, temperatures) and ugreen-cs201x-leds (front panel
-# LEDs), then start fancontrol. Meant to be registered as a
-# TrueNAS Community Edition Post-Init command:
+# Load ugreen-cs201x (fans, temperatures, front panel LEDs), then start
+# fancontrol. Meant to be registered as a TrueNAS Community Edition Post-Init
+# command:
 #
 #   System Settings -> Advanced -> Init/Shutdown Scripts -> Add
 #     Type: Command
@@ -34,9 +34,15 @@ log "starting (kernel $KVER, base $BASE)"
 
 # ---------------------------------------------------------------- the module
 
+# The module used to be split in two; the LED half cannot stay loaded.
+if lsmod | grep -q '^ugreen_cs201x_leds '; then
+	{ rmmod ugreen_cs201x_leds && rmmod ugreen_cs201x; } 2>>"$LOG" ||
+		die "cannot unload the old two-module build (see $LOG); reboot"
+fi
+
 if ! lsmod | grep -q '^ugreen_cs201x '; then
-	# The core registers an auxiliary device for the LED module.
-	modprobe -q auxiliary 2>>"$LOG" || true
+	# The LEDs are multicolor LED class devices; the module depends on it.
+	modprobe -q led-class-multicolor 2>>"$LOG" || true
 	[ -f "$KO" ] || die "no module for this kernel: $KO not found. Rebuild with scripts/build-in-docker.sh"
 
 	if ! insmod "$KO" 2>>"$LOG"; then
@@ -50,16 +56,6 @@ fi
 # ------------------------------------------------------------------ the LEDs
 #
 # Optional: a failure here is logged but never stops the fan setup below.
-
-KO_LEDS="$BASE/build/$KVER/ugreen-cs201x-leds.ko"
-if [ -f "$KO_LEDS" ] && ! lsmod | grep -q '^ugreen_cs201x_leds'; then
-	modprobe -q led-class-multicolor 2>>"$LOG" || true
-	if insmod "$KO_LEDS" 2>>"$LOG"; then
-		log "loaded $KO_LEDS"
-	else
-		log "WARNING: insmod $KO_LEDS failed (see $LOG and dmesg); continuing without LEDs"
-	fi
-fi
 
 # Keep the disk LEDs dark: their activity blinking is too bright for a room.
 # The driver already leaves them off at probe; this also drops a trigger set

@@ -25,8 +25,8 @@ UGREEN が GPL 義務で公開しているカーネルソース
   `sensors` / `fancontrol` / TrueNAS のレポート画面からは一切見えない
 - ARGB LED (`leds-sio-201x.c`) と `extern` で相互参照しており単体ビルド不可
 
-そこでファンと温度の部分を切り出して hwmon ABI で公開し直し、LED は別モジュールに移植して
-LED クラスで公開したのがこのリポジトリです。
+そこでファンと温度の部分を切り出して hwmon ABI で公開し直し、LED も移植して LED クラスで
+公開し、1 つのモジュールにまとめたのがこのリポジトリです。
 
 ## 対象機種
 
@@ -66,7 +66,7 @@ TrueNAS 25.04 以降は `root` での SSH ログインが既定で無効なの�
 2. **ビルド**: Docker コンテナ内で `.ko` を作ります。NAS のルート FS には何も入りません。
 
    ```sh
-   sudo bash ./scripts/build-in-docker.sh     # → build/$(uname -r)/ に .ko が 2 つできる
+   sudo bash ./scripts/build-in-docker.sh     # → build/$(uname -r)/ に .ko ができる
    ```
 
 3. **インストール**: ソース・スクリプト・`.ko` をプール上の `/mnt/<pool>/apps/ugreen-cs201x` にコピーします。
@@ -152,19 +152,19 @@ TrueNAS 25.04 以降は `root` での SSH ログインが既定で無効なの�
   存在しない。つまり**出荷 UGOS でもディレイ 0 で動いている**ため、遅延なしを踏襲した
 - `InitEc()` の宣言位置を修正（`-Wdeclaration-after-statement` はカーネルでは常時有効で、
   `CONFIG_WERROR=y` だとビルドエラーになる）
-- watchdog / 電源復帰設定（AMD FCH MMIO `0xFED8035B`）は移植していない。ARGB LED は別モジュール
-  `ugreen-cs201x-leds` として移植した（次節）
+- watchdog / 電源復帰設定（AMD FCH MMIO `0xFED8035B`）は移植していない。ARGB LED は
+  `ugreen-cs201x-leds.c` として移植し、同じモジュールにリンクした（次節）
 
 `W=1` で警告ゼロを維持しています。
 
-## 前面 LED（`ugreen-cs201x-leds`）
+## 前面 LED（`ugreen-cs201x-leds.c`）
 
 > 実機で、ビルドと LED の点灯を確認済みです。
 > 下の「未確認」の項目は、ベンダコードの読み取りからの推測です。
 
 前面の ARGB LED（power / LAN / disk1 / disk2）は、ファンと同じ EC のレジスタ空間にあります。
-EC の I/O ウィンドウとロックは `ugreen-cs201x` が持ち、LED 用モジュールは auxiliary bus
-（`ugreen_cs201x.leds`）経由でそれを借ります。LED モジュールは I/O ポートに直接触れず、
+EC の I/O ウィンドウとロックは `ugreen-cs201x-core.c` が持ち、LED のコードは同じモジュール内から
+専用の関数経由でそれを借ります。I/O ポートには直接触れず、
 アクセスできる EC アドレスも LED のブロックだけに限られます（ファンのレジスタには届きません）。
 そのため、**先に `ugreen-cs201x` をロードしてください**（`ugreen-init.sh` はその順で行います）。
 
@@ -279,7 +279,7 @@ bash ./scripts/install-truenas.sh [target-dir]   # 既定: /mnt/<最初のデー
 引数で配置先を変えられます。ビルド済みの `.ko` があれば一緒にコピーされます。
 起動時実行の登録（Init/Shutdown Scripts）はまとめの手順 6 のとおりです。
 
-`ugreen-init.sh` は insmod（ファン／温度用と LED 用の 2 モジュール）→ disk LED の消灯 →
+`ugreen-init.sh` は insmod → disk LED の消灯 →
 hwmon デバイスの発見 → `fancontrol` 設定の生成 → `fancontrol` 起動までを行い、ログを `ugreen-init.log` に残します。
 **現在のカーネル用の `.ko` が無ければ意図的に失敗します**（古い `.ko` を無理に入れない）。
 
@@ -372,7 +372,7 @@ bash ./scripts/ugreen-init.sh
 
 ## ライセンスと出典
 
-GPL-2.0-only。`ugreen-cs201x.c` は UGREEN の GPL リリース
+GPL-2.0-only。`ugreen-cs201x-core.c` と `ugreen-cs201x-leds.c` は UGREEN の GPL リリース
 [ugreen-opensource/kernel-6.12](https://github.com/ugreen-opensource/kernel-6.12) の
 `drivers/ugreen/ug_201x.c`（`SPDX-License-Identifier: GPL-2.0-only`,
 Author: Jason.Li \<lijiang@ugreen.com\>）の派生物です。

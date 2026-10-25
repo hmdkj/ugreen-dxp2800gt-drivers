@@ -47,7 +47,7 @@ hr "kernel features needed by the LED module"
 cfg="/boot/config-$(uname -r)"
 [ -f "$cfg" ] || cfg=
 if [ -n "$cfg" ]; then
-	grep -E '^(# )?CONFIG_(AUXILIARY_BUS|NEW_LEDS|LEDS_CLASS|LEDS_CLASS_MULTICOLOR|LEDS_TRIGGER_NETDEV|LEDS_TRIGGER_DISK|LEDS_TRIGGER_BLKDEV)[= ]' "$cfg" || echo "none of them found in $cfg"
+	grep -E '^(# )?CONFIG_(NEW_LEDS|LEDS_CLASS|LEDS_CLASS_MULTICOLOR|LEDS_TRIGGER_NETDEV|LEDS_TRIGGER_DISK|LEDS_TRIGGER_BLKDEV)[= ]' "$cfg" || echo "none of them found in $cfg"
 else
 	echo "no /boot/config-$(uname -r); try: zcat /proc/config.gz"
 fi

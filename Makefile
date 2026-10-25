@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
 obj-m += ugreen-cs201x.o
-obj-m += ugreen-cs201x-leds.o
+ugreen-cs201x-y := ugreen-cs201x-core.o ugreen-cs201x-leds.o
 
 KVER ?= $(shell uname -r)
 KDIR ?= /lib/modules/$(KVER)/build

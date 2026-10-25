@@ -3,9 +3,10 @@
  * ugreen-cs201x-leds - front panel LEDs of the UGREEN NASync DXP2800 GT
  *
  * The four ARGB LEDs (power, LAN, disk1, disk2) are driven by the same
- * Chipsea CS201x EC as the fans. The EC window and its lock belong to the
- * ugreen-cs201x module, which publishes them through an auxiliary device;
- * this module only binds to that device and never touches the I/O ports.
+ * Chipsea CS201x EC as the fans. The EC window and its lock belong to
+ * ugreen-cs201x-core.c; this file is linked into the same module and reaches
+ * the EC only through ugreen_cs201x_ec_led_{read,write}(), never through the
+ * I/O ports.
  *
  * Derived from drivers/ugreen/ug_201x.c (ArgbRgbSet/ArgbLightSet/ArgbModeSet)
  * and drivers/ugreen/leds-sio-201x.c of UGREEN's GPL kernel release
@@ -28,17 +29,13 @@
  * "UNVERIFIED" below.
  */
 
-#include <linux/auxiliary_bus.h>
 #include <linux/kernel.h>
 #include <linux/led-class-multicolor.h>
 #include <linux/leds.h>
-#include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
 
 #include "ugreen-cs201x.h"
-
-#define DRVNAME			"ugreen-cs201x-leds"
 
 #define NUM_LEDS		4
 #define NUM_COLORS		3	/* red, green, blue */
@@ -77,7 +74,7 @@ struct ugreen_led {
 };
 
 struct ugreen_leds {
-	struct ugreen_cs201x_aux_device *aux;
+	struct ugreen_cs201x_data *ec;
 	struct mutex lock;	/* keeps the multi-register LED updates whole */
 	struct ugreen_led led[NUM_LEDS];
 };
@@ -91,7 +88,7 @@ static const char * const ugreen_led_names[NUM_LEDS] = {
 
 static int ugreen_led_ec_write(struct ugreen_leds *priv, u32 addr, u8 val)
 {
-	return priv->aux->ops->write(priv->aux->ecdev, addr, val);
+	return ugreen_cs201x_ec_led_write(priv->ec, addr, val);
 }
 
 static int ugreen_led_set_mode(struct ugreen_leds *priv, unsigned int id, u8 mode)
@@ -202,12 +199,18 @@ static int ugreen_leds_register(struct device *dev, struct ugreen_leds *priv,
 	return devm_led_classdev_multicolor_register(dev, &led->mc);
 }
 
-static int ugreen_leds_probe(struct auxiliary_device *adev,
-			     const struct auxiliary_device_id *id)
+/* As the vendor driver does on removal; the LEDs keep their last state. */
+static void ugreen_leds_release(void *arg)
 {
-	struct ugreen_cs201x_aux_device *aux =
-		container_of(adev, struct ugreen_cs201x_aux_device, adev);
-	struct device *dev = &adev->dev;
+	struct ugreen_leds *priv = arg;
+
+	mutex_lock(&priv->lock);
+	ugreen_led_ec_write(priv, EC_ARGB_FLOW_CTRL, 0);
+	mutex_unlock(&priv->lock);
+}
+
+int ugreen_cs201x_leds_init(struct device *dev, struct ugreen_cs201x_data *data)
+{
 	struct ugreen_leds *priv;
 	unsigned int i;
 	int ret;
@@ -216,11 +219,10 @@ static int ugreen_leds_probe(struct auxiliary_device *adev,
 	if (!priv)
 		return -ENOMEM;
 
-	priv->aux = aux;
+	priv->ec = data;
 	ret = devm_mutex_init(dev, &priv->lock);
 	if (ret)
 		return ret;
-	auxiliary_set_drvdata(adev, priv);
 
 	/*
 	 * Same initial state as the vendor driver: flow control register to 1,
@@ -240,6 +242,11 @@ static int ugreen_leds_probe(struct auxiliary_device *adev,
 	if (ret)
 		return dev_err_probe(dev, ret, "cannot initialise the LED block\n");
 
+	/* Added before the LEDs, so devres runs it after they are unregistered. */
+	ret = devm_add_action_or_reset(dev, ugreen_leds_release, priv);
+	if (ret)
+		return ret;
+
 	for (i = 0; i < NUM_LEDS; i++) {
 		ret = ugreen_leds_register(dev, priv, i);
 		if (ret)
@@ -251,31 +258,3 @@ static int ugreen_leds_probe(struct auxiliary_device *adev,
 
 	return 0;
 }
-
-static void ugreen_leds_remove(struct auxiliary_device *adev)
-{
-	struct ugreen_leds *priv = auxiliary_get_drvdata(adev);
-
-	/* As the vendor driver does; the LEDs keep their last state. */
-	mutex_lock(&priv->lock);
-	ugreen_led_ec_write(priv, EC_ARGB_FLOW_CTRL, 0);
-	mutex_unlock(&priv->lock);
-}
-
-static const struct auxiliary_device_id ugreen_leds_id_table[] = {
-	{ .name = UGREEN_CS201X_AUX_LEDS_MATCH },
-	{}
-};
-MODULE_DEVICE_TABLE(auxiliary, ugreen_leds_id_table);
-
-static struct auxiliary_driver ugreen_leds_driver = {
-	.name = "leds",
-	.probe = ugreen_leds_probe,
-	.remove = ugreen_leds_remove,
-	.id_table = ugreen_leds_id_table,
-};
-module_auxiliary_driver(ugreen_leds_driver);
-
-MODULE_AUTHOR("Derived from UGREEN's ug_201x.c and leds-sio-201x.c by Jason.Li <lijiang@ugreen.com>");
-MODULE_DESCRIPTION("Front panel LEDs of the UGREEN DXP2800 GT (Chipsea CS201x EC)");
-MODULE_LICENSE("GPL v2");

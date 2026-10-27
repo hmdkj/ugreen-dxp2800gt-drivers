@@ -24,6 +24,7 @@ KVER=$(uname -r)
 KO="$BASE/build/$KVER/ugreen-cs201x.ko"
 CONF_IN="$BASE/contrib/fancontrol.conf.in"
 FANCONTROL="$BASE/contrib/fancontrol"
+DISKTEMP="$BASE/contrib/max-drivetemp"
 CONF=/run/ugreen-cs201x/fancontrol.conf
 LOG="$BASE/ugreen-init.log"
 
@@ -121,9 +122,14 @@ done
 
 [ -f "$CONF_IN" ] || die "$CONF_IN not found"
 [ -x "$FANCONTROL" ] || die "$FANCONTROL not found or not executable"
+[ -x "$DISKTEMP" ] || die "$DISKTEMP not found or not executable"
+
+# pwm2 follows the drive temperatures, which come from drivetemp.
+modprobe -q drivetemp 2>>"$LOG" || log "WARNING: cannot load drivetemp - pwm2 will assume a hot drive"
+log "hottest drive: $("$DISKTEMP" 2>&1) m°C"
 
 mkdir -p "$(dirname "$CONF")"
-sed -e "s|@HWMON@|$HWMON|g" -e "s|@DEVPATH@|$DEVPATH|g" "$CONF_IN" > "$CONF"
+sed -e "s|@HWMON@|$HWMON|g" -e "s|@DEVPATH@|$DEVPATH|g" -e "s|@DISKTEMP@|$DISKTEMP|g" "$CONF_IN" > "$CONF"
 
 if ! "$FANCONTROL" --check "$CONF" >>"$LOG" 2>&1; then
 	die "fancontrol rejected $CONF (see $LOG)"

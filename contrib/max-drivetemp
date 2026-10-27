@@ -1,0 +1,28 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Print the hottest drive temperature in millidegrees C, the way fancontrol
+# expects from a "!command" entry in FCTEMPS. Reads the hwmon devices that the
+# drivetemp module creates, so it does not depend on hwmon numbering.
+#
+# If no drive temperature can be read it prints a high value instead of
+# failing: fancontrol exits on a failing command, and a fan that stays slow
+# because the sensor vanished is the worse outcome.
+
+FALLBACK=60000
+
+max=
+for d in /sys/class/hwmon/hwmon*; do
+	[ "$(cat "$d/name" 2>/dev/null)" = "drivetemp" ] || continue
+	t=$(cat "$d/temp1_input" 2>/dev/null) || continue
+	case "$t" in ''|*[!0-9]*) continue ;; esac
+	if [ -z "$max" ] || [ "$t" -gt "$max" ]; then
+		max=$t
+	fi
+done
+
+if [ -z "$max" ]; then
+	echo "max-drivetemp: no drivetemp reading, assuming $FALLBACK" >&2
+	max=$FALLBACK
+fi
+echo "$max"

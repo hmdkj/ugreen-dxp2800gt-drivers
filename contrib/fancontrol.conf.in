@@ -5,12 +5,15 @@
 #              (hwmon0, hwmon3, ... - the number is not stable across boots,
 #               which is why this is a template and not a static config)
 #   @DEVPATH@  with the device path fancontrol validates against
+#   @DISKTEMP@ with the path of contrib/max-drivetemp, which prints the
+#              hottest drive temperature (drivetemp module) for pwm2
 #
 # Everything else is meant to be edited by hand. All pwm values are 0-255;
 # the EC only has 1 % resolution, so ~2.5 pwm steps per percent.
 #
 # pwm1/fan1/temp1 = CPU fan and CPU NTC
-# pwm2/fan2/temp2 = system fan and board NTC
+# pwm2/fan2        = system fan, driven by the hottest drive instead of
+#                    the board NTC (temp2_input is still readable)
 # If your machine only populates one of the two fan headers, delete the
 # entries for the missing one from every line below.
 
@@ -19,21 +22,23 @@ INTERVAL=10
 DEVPATH=@HWMON@=@DEVPATH@
 DEVNAME=@HWMON@=ugreen_cs201x
 
-FCTEMPS=@HWMON@/pwm1=@HWMON@/temp1_input @HWMON@/pwm2=@HWMON@/temp2_input
+FCTEMPS=@HWMON@/pwm1=@HWMON@/temp1_input @HWMON@/pwm2=!@DISKTEMP@
 FCFANS=@HWMON@/pwm1=@HWMON@/fan1_input @HWMON@/pwm2=@HWMON@/fan2_input
 
 # Below MINTEMP the fan runs at MINPWM, above MAXTEMP at MAXPWM,
 # and it interpolates linearly in between.
-MINTEMP=@HWMON@/pwm1=50 @HWMON@/pwm2=45
-MAXTEMP=@HWMON@/pwm1=75 @HWMON@/pwm2=55
+MINTEMP=@HWMON@/pwm1=50 @HWMON@/pwm2=38
+MAXTEMP=@HWMON@/pwm1=75 @HWMON@/pwm2=52
 
 # MINSTART: pwm needed to spin a stopped fan back up.
 # MINSTOP:  lowest pwm at which the fan keeps turning.
 # Both must be measured on the actual machine - see README.md. Measured here:
 # fan1 never stops down to pwm 20 (1067 rpm); fan2 stops at pwm 20 and is at
 # 197 rpm at 30. MINSTOP keeps a margin above those, and fancontrol requires
-# MINSTOP >= MINPWM. Idle temperatures were about 46 C (temp1) and 42 C
-# (temp2), so MINTEMP sits a few degrees above.
+# MINSTOP >= MINPWM. pwm1 follows the CPU NTC, which idled at about 46 C, so
+# its MINTEMP sits a few degrees above. pwm2 follows the drives (42-45 C
+# measured): the aim is to keep them at 45 C or below and never above 50 C,
+# so 38-52 C gives pwm 147 (58 %) at 45 C and 224 (88 %) at 50 C.
 MINSTART=@HWMON@/pwm1=40 @HWMON@/pwm2=60
 MINSTOP=@HWMON@/pwm1=30 @HWMON@/pwm2=40
 

@@ -29,8 +29,9 @@ mkdir -p "$TARGET/scripts" "$TARGET/contrib" "$TARGET/build"
 cp -v "$SRCDIR/ugreen-cs201x-core.c" "$SRCDIR/ugreen-cs201x-leds.c" "$SRCDIR/ugreen-cs201x.h" \
 	"$SRCDIR/Makefile" "$SRCDIR/LICENSE" "$SRCDIR/README.md" "$TARGET/"
 cp -v "$SRCDIR"/scripts/*.sh "$TARGET/scripts/"
-cp -v "$SRCDIR"/contrib/fancontrol "$SRCDIR"/contrib/fancontrol.conf.in "$TARGET/contrib/"
-chmod +x "$TARGET"/scripts/*.sh "$TARGET/contrib/fancontrol"
+cp -v "$SRCDIR"/contrib/fancontrol "$SRCDIR"/contrib/fancontrol.conf.in \
+	"$SRCDIR"/contrib/max-drivetemp "$TARGET/contrib/"
+chmod +x "$TARGET"/scripts/*.sh "$TARGET/contrib/fancontrol" "$TARGET/contrib/max-drivetemp"
 
 if [ -f "$SRCDIR/build/$KVER/ugreen-cs201x.ko" ]; then
 	mkdir -p "$TARGET/build/$KVER"

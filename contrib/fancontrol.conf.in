@@ -27,8 +27,8 @@ FCFANS=@HWMON@/pwm1=@HWMON@/fan1_input @HWMON@/pwm2=@HWMON@/fan2_input
 
 # Below MINTEMP the fan runs at MINPWM, above MAXTEMP at MAXPWM,
 # and it interpolates linearly in between.
-MINTEMP=@HWMON@/pwm1=50 @HWMON@/pwm2=38
-MAXTEMP=@HWMON@/pwm1=75 @HWMON@/pwm2=52
+MINTEMP=@HWMON@/pwm1=50 @HWMON@/pwm2=0
+MAXTEMP=@HWMON@/pwm1=75 @HWMON@/pwm2=100
 
 # MINSTART: pwm needed to spin a stopped fan back up.
 # MINSTOP:  lowest pwm at which the fan keeps turning.
@@ -36,9 +36,15 @@ MAXTEMP=@HWMON@/pwm1=75 @HWMON@/pwm2=52
 # fan1 never stops down to pwm 20 (1067 rpm); fan2 stops at pwm 20 and is at
 # 197 rpm at 30. MINSTOP keeps a margin above those, and fancontrol requires
 # MINSTOP >= MINPWM. pwm1 follows the CPU NTC, which idled at about 46 C, so
-# its MINTEMP sits a few degrees above. pwm2 follows the drives (42-45 C
-# measured): the aim is to keep them at 45 C or below and never above 50 C,
-# so 38-52 C gives pwm 147 (58 %) at 45 C and 224 (88 %) at 50 C.
+# its MINTEMP sits a few degrees above.
+#
+# pwm2 follows the drives (42-45 C measured), but its "temperature" is a
+# virtual one: contrib/max-drivetemp maps the real drive temperature through
+# a piecewise curve and prints the value that makes the straight line below
+# (MINTEMP=0, MAXTEMP=100, MINSTOP=MINPWM=40, MAXPWM=255) land on the
+# intended pwm. So do not tune pwm2 here - edit CURVE in max-drivetemp, and
+# keep its LOW_PWM/HIGH_PWM equal to pwm2's MINSTOP/MAXPWM below. Run
+# "contrib/max-drivetemp --debug" to see the real temperature and the pwm.
 MINSTART=@HWMON@/pwm1=40 @HWMON@/pwm2=60
 MINSTOP=@HWMON@/pwm1=30 @HWMON@/pwm2=40
 

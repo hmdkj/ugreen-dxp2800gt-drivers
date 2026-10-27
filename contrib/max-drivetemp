@@ -1,18 +1,54 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# Print the hottest drive temperature in millidegrees C, the way fancontrol
-# expects from a "!command" entry in FCTEMPS. Reads the hwmon devices that the
-# drivetemp module creates, so it does not depend on hwmon numbering.
+# Temperature source for pwm2 in fancontrol.conf.in, used as a "!command"
+# entry in FCTEMPS (fancontrol reads its output as millidegrees C).
 #
-# If no drive temperature can be read it prints a high value instead of
-# failing: fancontrol exits on a failing command, and a fan that stays slow
-# because the sensor vanished is the worse outcome.
+# fancontrol can only interpolate along one straight line per fan, so the
+# fan curve lives here instead. This script
+#   1. takes the hottest drivetemp reading,
+#   2. maps it through CURVE (piecewise linear) to a target pwm,
+#   3. limits how fast the target may fall (MAX_DROP per call),
+#   4. prints a "virtual temperature" that makes fancontrol's straight line
+#      land exactly on that target.
+# The virtual temperature is only meaningful together with the pwm2 settings
+# in fancontrol.conf.in: MINTEMP=0 MAXTEMP=100 MINSTOP=MINPWM=40 MAXPWM=255.
+# Run with --debug to see the real temperature and the target.
+#
+# If no drive temperature can be read, the curve is evaluated at FALLBACK
+# instead of failing: fancontrol exits on a failing command, and a fan that
+# stays slow because the sensor vanished is the worse outcome.
 
+# "temperature [C]  pwm" points, ascending. Below the first point the pwm is
+# the first one, above the last point the last one.
+CURVE="38 40
+40 60
+42 85
+44 115
+46 145
+48 175
+50 210
+52 240
+55 255"
+
+# Must match MINSTOP/MINPWM and MAXPWM of pwm2 in fancontrol.conf.in.
+LOW_PWM=40
+HIGH_PWM=255
+# The target may fall by at most this much per call (fancontrol calls once
+# per INTERVAL). Rising is immediate.
+MAX_DROP=3
 FALLBACK=60000
 
+# UGREEN_HWMON_DIR and UGREEN_STATE exist so the mapping can be tested
+# without the hardware.
+HWMON_DIR=${UGREEN_HWMON_DIR:-/sys/class/hwmon}
+STATE=${UGREEN_STATE:-/run/ugreen-cs201x/drivetemp.state}
+
+debug=0
+[ "$1" = "--debug" ] && debug=1
+
 max=
-for d in /sys/class/hwmon/hwmon*; do
+for d in "$HWMON_DIR"/hwmon*; do
 	[ "$(cat "$d/name" 2>/dev/null)" = "drivetemp" ] || continue
 	t=$(cat "$d/temp1_input" 2>/dev/null) || continue
 	case "$t" in ''|*[!0-9]*) continue ;; esac
@@ -21,8 +57,43 @@ for d in /sys/class/hwmon/hwmon*; do
 	fi
 done
 
+real=$max
 if [ -z "$max" ]; then
 	echo "max-drivetemp: no drivetemp reading, assuming $FALLBACK" >&2
 	max=$FALLBACK
+	real=none
 fi
-echo "$max"
+
+last=
+[ -r "$STATE" ] && read -r last < "$STATE"
+case "$last" in ''|*[!0-9]*) last=-1 ;; esac
+
+out=$(echo "$CURVE" | awk -v t="$max" -v last="$last" -v drop="$MAX_DROP" \
+	-v low="$LOW_PWM" -v high="$HIGH_PWM" '
+	{ c[NR] = $1 * 1000; p[NR] = $2 }
+	END {
+		if (t <= c[1])       target = p[1]
+		else if (t >= c[NR]) target = p[NR]
+		else {
+			for (i = 2; i <= NR; i++)
+				if (t <= c[i]) break
+			target = p[i-1] + (t - c[i-1]) * (p[i] - p[i-1]) / (c[i] - c[i-1])
+			target = int(target + 0.5)
+		}
+		if (target < low)  target = low
+		if (target > high) target = high
+		if (last >= 0 && target < last - drop) target = last - drop
+		# Smallest V for which fancontrol computes V*(high-low)/100000+low = target.
+		v = int(((target - low) * 100000 + (high - low) - 1) / (high - low))
+		print target, v
+	}')
+target=${out% *}
+virtual=${out#* }
+
+if [ "$debug" = 1 ]; then
+	echo "real=$real target_pwm=$target virtual=$virtual"
+else
+	mkdir -p "$(dirname "$STATE")" 2>/dev/null
+	echo "$target" > "$STATE" 2>/dev/null
+fi
+echo "$virtual"

@@ -126,7 +126,7 @@ done
 
 # pwm2 follows the drive temperatures, which come from drivetemp.
 modprobe -q drivetemp 2>>"$LOG" || log "WARNING: cannot load drivetemp - pwm2 will assume a hot drive"
-log "hottest drive: $("$DISKTEMP" 2>&1) m°C"
+log "drives: $("$DISKTEMP" --debug 2>&1 | head -1)"
 
 mkdir -p "$(dirname "$CONF")"
 sed -e "s|@HWMON@|$HWMON|g" -e "s|@DEVPATH@|$DEVPATH|g" -e "s|@DISKTEMP@|$DISKTEMP|g" "$CONF_IN" > "$CONF"

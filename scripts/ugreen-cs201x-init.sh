@@ -8,7 +8,7 @@
 #
 #   System Settings -> Advanced -> Init/Shutdown Scripts -> Add
 #     Type: Command
-#     Command: /mnt/<pool>/apps/ugreen-cs201x/scripts/ugreen-init.sh
+#     Command: /mnt/<pool>/apps/ugreen-cs201x/scripts/ugreen-cs201x-init.sh
 #     When: Post Init
 #
 # Everything it needs lives next to it, on a pool dataset, because the
@@ -23,7 +23,7 @@ set -u
 BASE=$(cd "$(dirname "$0")/.." && pwd)
 KVER=$(uname -r)
 KO="$BASE/build/$KVER/ugreen-cs201x.ko"
-LOG="$BASE/ugreen-init.log"
+LOG="$BASE/ugreen-cs201x-init.log"
 
 # pwm (0-255) both fans get as soon as the module loads, until the fan
 # controller takes over. 153 (60 %) keeps the drives under about 46 C even if

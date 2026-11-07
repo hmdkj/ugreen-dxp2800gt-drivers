@@ -45,13 +45,13 @@ cat <<EOF
 Installed. Remaining steps:
 
 1. Try it once by hand:
-     sudo bash $TARGET/scripts/ugreen-init.sh
+     sudo bash $TARGET/scripts/ugreen-cs201x-init.sh
 
 2. Make it survive reboots:
      TrueNAS UI -> System Settings -> Advanced -> Init/Shutdown Scripts -> Add
        Description: ugreen fan and LED setup
        Type:        Command
-       Command:     $TARGET/scripts/ugreen-init.sh
+       Command:     $TARGET/scripts/ugreen-cs201x-init.sh
        When:        Post Init
 
 After every TrueNAS update the kernel changes and the module must be

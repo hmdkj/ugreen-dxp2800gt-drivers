@@ -64,11 +64,11 @@ TrueNAS 25.04 以降は `root` での SSH ログインが既定で無効なの�
 4. **手動で一度実行**して動作を確かめます。
 
    ```sh
-   sudo bash /mnt/<pool>/apps/ugreen-cs201x/scripts/ugreen-init.sh
+   sudo bash /mnt/<pool>/apps/ugreen-cs201x/scripts/ugreen-cs201x-init.sh
    ```
 
    `dmesg` に `set both fans to pwm 153` と出て、ファンの音が下がれば成功です。失敗した場合は
-   同じ場所の `ugreen-init.log` と `dmesg` を見てください。
+   同じ場所の `ugreen-cs201x-init.log` と `dmesg` を見てください。
 
 5. **起動時に自動実行**する設定を UI で登録します。
 
@@ -76,18 +76,18 @@ TrueNAS 25.04 以降は `root` での SSH ログインが既定で無効なの�
    System Settings → Advanced → Init/Shutdown Scripts → Add
      Description: ugreen fan and LED setup
      Type:        Command
-     Command:     /mnt/<pool>/apps/ugreen-cs201x/scripts/ugreen-init.sh
+     Command:     /mnt/<pool>/apps/ugreen-cs201x/scripts/ugreen-cs201x-init.sh
      When:        Post Init
    ```
 
-6. **再起動して確認**します。`ugreen-init.log` に新しい起動の記録があり、ファンが 100 % から下がっていれば完了です。
+6. **再起動して確認**します。`ugreen-cs201x-init.log` に新しい起動の記録があり、ファンが 100 % から下がっていれば完了です。
 
 ビルドや動作がうまくいかない場合は、`scripts/collect-hw-info.sh` で環境を確認できます。
 
-### ugreen-init.sh の動作
+### ugreen-cs201x-init.sh の動作
 
 何度実行しても同じ状態になります。先にモジュールを外し（rmmod）、insmod（`init_pwm` でファンを下げる）→
-電源 LED の設定 → hwmon デバイスの発見 → `drivetemp` のロードまでを行い、ログを `ugreen-init.log` に残します。
+電源 LED の設定 → hwmon デバイスの発見 → `drivetemp` のロードまでを行い、ログを `ugreen-cs201x-init.log` に残します。
 **現在のカーネル用の `.ko` が無ければ意図的に失敗します**（古い `.ko` を無理に入れない）。
 
 ### ビルド時のカーネルヘッダ
@@ -115,7 +115,7 @@ TrueNAS を更新するとカーネル ABI が変わるため、`.ko` を作り�
 ```sh
 cd /mnt/<pool>/apps/ugreen-cs201x
 bash ./scripts/build-in-docker.sh
-bash ./scripts/ugreen-init.sh
+bash ./scripts/ugreen-cs201x-init.sh
 ```
 
 再ビルドまでの間、Post-Init は失敗し、モジュールが無いのでファンは EC 既定の 100 % のままです。
@@ -155,9 +155,9 @@ hwmon の意味（`0` = 全開）で受け付けて停止してしまうと機�
 ## ファン制御
 
 温度に応じた制御は、hwmon を扱える外部ツールに任せます（このリポジトリに制御ロジックはありません）。
-温度は `temp*_input` と、`ugreen-init.sh` がロードする `drivetemp`（ドライブ温度）から読めます。
+温度は `temp*_input` と、`ugreen-cs201x-init.sh` がロードする `drivetemp`（ドライブ温度）から読めます。
 
-EC は電源投入時にファンを 100 % で回します。`ugreen-init.sh` はロード直後に、これを
+EC は電源投入時にファンを 100 % で回します。`ugreen-cs201x-init.sh` はロード直後に、これを
 `INIT_PWM`（既定 153 = 約 60 %）へ下げます。外部ツールが動き出すまで、ファンはこの値のままです。
 
 - 153 は、ドライブ温度が 42–45 ℃で推移する構成なら、制御が起動しないままでも 46 ℃を超えないと
@@ -198,7 +198,7 @@ EC は電源投入時にファンを 100 % で回します。`ugreen-init.sh` �
 EC の I/O ウィンドウとロックは `ugreen-cs201x-core.c` が持ち、LED のコードは同じモジュール内から
 専用の関数経由でそれを借ります。I/O ポートには直接触れず、
 アクセスできる EC アドレスも LED のブロックだけに限られます（ファンのレジスタには届きません）。
-そのため、**先に `ugreen-cs201x` をロードしてください**（`ugreen-init.sh` はその順で行います）。
+そのため、**先に `ugreen-cs201x` をロードしてください**（`ugreen-cs201x-init.sh` はその順で行います）。
 
 LED は **multicolor LED クラス**として `/sys/class/leds/` に現れます。
 
@@ -216,7 +216,7 @@ echo 0 > $L/brightness                  # 消灯
 ```
 
 LED の点灯状態は、ドライバのロード直後は電源のみ点灯、他は消灯です（ベンダドライバと同じ）。
-`ugreen-init.sh` は夜に眩しくないよう、電源 LED を **暗い緑の常時点灯**（`multi_intensity` が `0 3 0`）に
+`ugreen-cs201x-init.sh` は夜に眩しくないよう、電源 LED を **暗い緑の常時点灯**（`multi_intensity` が `0 3 0`）に
 設定します。明るさを変えたいときは、スクリプト先頭付近の `POWER_LED_RGB` の緑の値（0〜255）を書き換えてください。
 
 ### LAN のアクティビティに連動させる

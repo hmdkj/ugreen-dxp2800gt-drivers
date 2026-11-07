@@ -2,13 +2,14 @@
 # SPDX-License-Identifier: GPL-2.0-only
 #
 # Load ugreen-cs201x (fans, temperatures, front panel LEDs) and drop the fans
-# from the EC's power-on 100 % to INIT_PWM. Fan control after that is left to
-# whatever drives the hwmon pwm files. Meant to be registered as a TrueNAS Community Edition Post-Init
+# from the EC's power-on 100 % to INIT_PWM. Also sets the power LED and loads
+# drivetemp. Fan control after that is left to whatever drives the hwmon pwm
+# files. Meant to be registered as a TrueNAS Community Edition Post-Init
 # command:
 #
 #   System Settings -> Advanced -> Init/Shutdown Scripts -> Add
 #     Type: Command
-#     Command: /mnt/<pool>/apps/ugreen-cs201x/scripts/ugreen-cs201x-init.sh
+#     Command: /mnt/<pool>/apps/ugreen-cs201x/scripts/load-module.sh
 #     When: Post Init
 #
 # Everything it needs lives next to it, on a pool dataset, because the
@@ -23,7 +24,7 @@ set -u
 BASE=$(cd "$(dirname "$0")/.." && pwd)
 KVER=$(uname -r)
 KO="$BASE/build/$KVER/ugreen-cs201x.ko"
-LOG="$BASE/ugreen-cs201x-init.log"
+LOG="$BASE/load-module.log"
 
 # pwm (0-255) both fans get as soon as the module loads, until the fan
 # controller takes over. 153 (60 %) keeps the drives under about 46 C even if

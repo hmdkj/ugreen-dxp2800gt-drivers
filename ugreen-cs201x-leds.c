@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * ugreen-cs201x-leds - front panel LEDs of the UGREEN NASync DXP2800 GT
+ * ugreen-cs201x-leds - front panel LEDs behind the Chipsea CS201x EC of UGREEN
+ *			NASync (tested on the DXP2800 GT)
  *
  * The four ARGB LEDs (power, LAN, disk1, disk2) are driven by the same
  * Chipsea CS201x EC as the fans. The EC window and its lock belong to

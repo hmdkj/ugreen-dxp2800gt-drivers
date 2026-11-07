@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * ugreen-cs201x - hwmon and front panel LED driver for the Chipsea CS201x
- *		   Super I/O / EC as found in the UGREEN NASync DXP2800 GT.
+ *		   Super I/O / EC as found in UGREEN NASync models such as the
+ *		   DXP2800 GT (the only one tested).
  *
  * This file owns the EC I/O window and its lock and exports the fans and
  * temperatures; the LEDs are in ugreen-cs201x-leds.c, linked into the same
@@ -700,5 +701,5 @@ module_init(ugreen_cs201x_init);
 module_exit(ugreen_cs201x_exit);
 
 MODULE_AUTHOR("Derived from UGREEN's ug_201x.c and leds-sio-201x.c by Jason.Li <lijiang@ugreen.com>");
-MODULE_DESCRIPTION("hwmon and front panel LED driver for the Chipsea CS201x EC in the UGREEN DXP2800 GT");
+MODULE_DESCRIPTION("hwmon and front panel LED driver for the Chipsea CS201x EC in UGREEN NASync (tested on the DXP2800 GT)");
 MODULE_LICENSE("GPL v2");

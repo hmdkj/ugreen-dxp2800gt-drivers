@@ -1,20 +1,27 @@
 # ugreen-cs201x
 
-UGREEN **DXP2800 GT** のファンと温度センサを Linux 標準の **hwmon**、前面の ARGB LED を
-**LED クラス**として扱えるようにするカーネルモジュールです。TrueNAS Community Edition（25.04 以降）向けの
+Chipsea **CS201x** EC のファンと温度センサを Linux 標準の **hwmon**、ARGB LED を
+**LED クラス**として扱えるようにするカーネルモジュールです。UGREEN NASync の CS201x 搭載機向けで、
+動作確認は **DXP2800 GT** で行っています。TrueNAS Community Edition（25.04 以降）向けの
 導入スクリプトも含みます。
 
-## 対象機種
+## 対応チップと機種
 
-**DXP2800 GT のみ**（DMI の product name が `DXP2800 GT`、Super I/O チップ ID `0x2011`）。
+対象は Super I/O チップ ID が `0x2011` の **Chipsea CS201x** を積んだ機種です。
+動作確認ができているのは **DXP2800 GT だけ**です。
 
-同じ「GT」でもチップが違うので他機種では動きません。参考：
+- 既定では、DMI の product name が `DXP2800 GT` の機種でしかロードしません。
+- 他の CS201x 搭載機は、モジュールパラメータ `force=1` で DMI の判定を飛ばして試せます
+  （チップ ID の確認は残ります）。ただしレジスタ定義は DXP2800 GT 向けのベンダコードに基づくため、
+  ファンや LED の本数、レジスタが違う可能性があります。自己責任で試してください。
+
+UGREEN の機種でもチップが違えば動きません。参考：
 
 | 機種 | チップ | 状況 |
 |---|---|---|
 | DXP2800/4800/4800 Plus/6800/8800/480T Plus, DH2600 | ITE IT8613 | **上流の `it87` ドライバで動く**（このリポジトリは不要）|
 | iDX6011 / 6012 / 6011 Pro, DXP4800 GT | ITE IT55xx (ACPI EC 0x62/0x66) | 上流に相当ドライバなし。別途移植が必要 |
-| **DXP2800 GT** | **Chipsea CS201x** | **ここ** |
+| **CS201x 搭載機**（動作確認: DXP2800 GT）| **Chipsea CS201x** | **ここ** |
 
 ## TrueNAS への導入
 
@@ -165,7 +172,7 @@ EC は電源投入時にファンを 100 % で回します。`ugreen-init.sh` �
 
 - procfs ではなく hwmon (`devm_hwmon_device_register_with_info`) で公開
 - **EC の I/O ウィンドウを `devm_request_region()` で確保**し、`acpi_check_resource_conflict()`
-  で ACPI の予約と衝突しないか確認する。ファームウェアが先に予約している場合（DXP2800 GT では
+  で ACPI の予約と衝突しないか確認する。ファームウェアが先に予約している場合（DXP2800 GT で確認した例では
   `pnp 00:03` が 0x200–0x207 を恒久的に持つ）は、警告を出してそのまま使う
   （ベンダ版は `0x2e/0x2f` しか確保せず、しかも `release_region()` した後に EC を叩いている）
 - チップ ID に加えて **DMI の product name も照合**（ベンダ版はチップ ID だけを見るので、
@@ -187,7 +194,7 @@ EC は電源投入時にファンを 100 % で回します。`ugreen-init.sh` �
 
 > 実機で、ビルドと LED の点灯を確認済みです。
 
-前面の ARGB LED（power / LAN / disk1 / disk2）は、ファンと同じ EC のレジスタ空間にあります。
+前面の ARGB LED（DXP2800 GT で確認した構成は power / LAN / disk1 / disk2）は、ファンと同じ EC のレジスタ空間にあります。
 EC の I/O ウィンドウとロックは `ugreen-cs201x-core.c` が持ち、LED のコードは同じモジュール内から
 専用の関数経由でそれを借ります。I/O ポートには直接触れず、
 アクセスできる EC アドレスも LED のブロックだけに限られます（ファンのレジスタには届きません）。

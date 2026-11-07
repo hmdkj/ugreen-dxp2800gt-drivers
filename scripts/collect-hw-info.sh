@@ -16,7 +16,7 @@ hr "kernel"
 uname -a
 echo "uname -r: $(uname -r)"
 
-hr "product identity (the driver matches DMI_PRODUCT_NAME == 'DXP2800 GT')"
+hr "product identity (the driver's DMI allowlist has only 'DXP2800 GT')"
 for f in product_name sys_vendor board_name product_version bios_version; do
 	printf '%-16s %s\n' "$f:" "$(cat "/sys/class/dmi/id/$f" 2>/dev/null || echo '<unreadable>')"
 done

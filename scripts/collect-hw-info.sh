@@ -67,7 +67,7 @@ hr "what is available to build with"
 echo "kernel build dir: $(test -d "/lib/modules/$(uname -r)/build" && echo present || echo MISSING)"
 echo "/boot/config-$(uname -r): $(test -f "/boot/config-$(uname -r)" && echo present || echo missing)"
 echo "/proc/config.gz: $(test -f /proc/config.gz && echo present || echo missing)"
-for t in gcc make docker podman install-dev-tools dmidecode sensors fancontrol; do
+for t in gcc make docker podman install-dev-tools dmidecode sensors; do
 	printf '%-20s %s\n' "$t:" "$(command -v "$t" || echo '<not found>')"
 done
 

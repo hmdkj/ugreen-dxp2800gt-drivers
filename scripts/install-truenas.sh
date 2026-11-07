@@ -24,14 +24,12 @@ fi
 [ "$(readlink -f "$TARGET")" != "$SRCDIR" ] || { echo "target is the source directory" >&2; exit 1; }
 
 echo "installing to $TARGET"
-mkdir -p "$TARGET/scripts" "$TARGET/contrib" "$TARGET/build"
+mkdir -p "$TARGET/scripts" "$TARGET/build"
 
 cp -v "$SRCDIR/ugreen-cs201x-core.c" "$SRCDIR/ugreen-cs201x-leds.c" "$SRCDIR/ugreen-cs201x.h" \
 	"$SRCDIR/Makefile" "$SRCDIR/LICENSE" "$SRCDIR/README.md" "$TARGET/"
 cp -v "$SRCDIR"/scripts/*.sh "$TARGET/scripts/"
-cp -v "$SRCDIR"/contrib/fancontrol "$SRCDIR"/contrib/fancontrol.conf.in \
-	"$SRCDIR"/contrib/max-drivetemp "$TARGET/contrib/"
-chmod +x "$TARGET"/scripts/*.sh "$TARGET/contrib/fancontrol" "$TARGET/contrib/max-drivetemp"
+chmod +x "$TARGET"/scripts/*.sh
 
 if [ -f "$SRCDIR/build/$KVER/ugreen-cs201x.ko" ]; then
 	mkdir -p "$TARGET/build/$KVER"
@@ -46,23 +44,18 @@ cat <<EOF
 
 Installed. Remaining steps:
 
-1. Check the fan curve in
-     $TARGET/contrib/fancontrol.conf.in
-   MINSTOP/MINSTART in particular should be measured on this machine
-   (see README.md, "Measuring the fan curve").
-
-2. Try it once by hand:
+1. Try it once by hand:
      sudo bash $TARGET/scripts/ugreen-init.sh
 
-3. Make it survive reboots:
+2. Make it survive reboots:
      TrueNAS UI -> System Settings -> Advanced -> Init/Shutdown Scripts -> Add
-       Description: ugreen fan and LED control
+       Description: ugreen fan and LED setup
        Type:        Command
        Command:     $TARGET/scripts/ugreen-init.sh
        When:        Post Init
 
 After every TrueNAS update the kernel changes and the module must be
 rebuilt with scripts/build-in-docker.sh. Until then the Post-Init script
-fails loudly instead of loading a mismatched module, the fans fall back to
+fails loudly instead of loading a mismatched module, the fans stay at
 whatever the EC does on its own, and the LEDs keep the EC's default state.
 EOF

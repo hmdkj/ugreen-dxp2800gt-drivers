@@ -16,7 +16,7 @@
  * /proc/it86/ text interface and bundles them with watchdog, ARGB LED and
  * power-restore support. This rewrite keeps only the fan and temperature
  * paths and exports them through the standard hwmon ABI, so that
- * lm-sensors / fancontrol and anything else that speaks hwmon can use them.
+ * lm-sensors and anything else that speaks hwmon can use them.
  *
  * Register map and access sequences are taken verbatim from the vendor
  * driver; the differences are:
@@ -72,11 +72,9 @@
 #define CS201X_CHIP_ID		0x2011
 
 /* Host2EC indirect memory access (IMA) window, relative to its base */
-#define IMA_HOST_CTS		0x00
 #define IMA_CTRL		0x01	/* 0: no auto-increment, single byte */
 #define IMA_ADDR		0x04	/* 4 bytes, EC address */
 #define IMA_DATA		0x08
-#define IMA_SEM			0x0c
 #define IMA_REGION_LEN		0x10
 
 /* EC address space */
@@ -112,6 +110,11 @@
 #define PWM_TO_DUTY(pwm)	((pwm) * 100 / 255)
 #define DUTY_TO_PWM(duty)	DIV_ROUND_CLOSEST((duty) * 255, 100)
 
+static bool pwm_valid(long pwm)
+{
+	return pwm >= 0 && pwm <= 255;
+}
+
 static bool force;
 module_param(force, bool, 0);
 MODULE_PARM_DESC(force,
@@ -121,6 +124,11 @@ static bool pwm_readback = true;
 module_param(pwm_readback, bool, 0644);
 MODULE_PARM_DESC(pwm_readback,
 		 "Read pwm* back from the EC duty register (default). Set to 0 to report the last written value instead");
+
+static int init_pwm = -1;
+module_param(init_pwm, int, 0444);
+MODULE_PARM_DESC(init_pwm,
+		 "PWM value (0-255) to program into both fans on module load; -1 (default) leaves the EC untouched (fans stay at whatever it drives, usually 100%)");
 
 static int unload_pwm = -1;
 module_param(unload_pwm, int, 0644);
@@ -365,7 +373,7 @@ static int ugreen_cs201x_write(struct device *dev, enum hwmon_sensor_types type,
 
 	switch (attr) {
 	case hwmon_pwm_input:
-		if (val < 0 || val > 255)
+		if (!pwm_valid(val))
 			return -EINVAL;
 
 		mutex_lock(&data->lock);
@@ -468,6 +476,7 @@ static int ugreen_cs201x_probe(struct platform_device *pdev)
 	struct ugreen_cs201x_data *data;
 	struct device *hwmon_dev;
 	struct resource *res;
+	bool set_init;
 	int i, ret;
 
 	res = platform_get_resource(pdev, IORESOURCE_IO, 0);
@@ -493,6 +502,11 @@ static int ugreen_cs201x_probe(struct platform_device *pdev)
 	mutex_init(&data->lock);
 	platform_set_drvdata(pdev, data);
 
+	set_init = pwm_valid(init_pwm);
+	if (init_pwm >= 0 && !set_init)
+		dev_warn(dev, "init_pwm=%d is out of range (0-255), ignoring\n",
+			 init_pwm);
+
 	/*
 	 * Enable both fan PWM outputs and put ADC channels 2 and 4 into
 	 * temperature mode, exactly as the vendor driver's InitEc() does.
@@ -501,6 +515,8 @@ static int ugreen_cs201x_probe(struct platform_device *pdev)
 	for (i = 0; i < UGREEN_CS201X_NUM_FANS; i++) {
 		ec_write_byte(data, EC_FAN_EN(i), 1);
 		data->enable[i] = 1;
+		if (set_init)
+			ec_write_byte(data, EC_FAN_DUTY(i), PWM_TO_DUTY(init_pwm));
 		/*
 		 * Seed the shadow pwm value from whatever the EC is currently
 		 * driving, so that pwm_readback=0 does not report 0 until
@@ -512,6 +528,9 @@ static int ugreen_cs201x_probe(struct platform_device *pdev)
 	ec_write_byte(data, EC_ADC_CH2_CFG, 1);
 	ec_write_byte(data, EC_ADC_CH4_CFG, 1);
 	mutex_unlock(&data->lock);
+
+	if (set_init)
+		dev_info(dev, "set both fans to pwm %d\n", init_pwm);
 
 	hwmon_dev = devm_hwmon_device_register_with_info(dev, HWMON_NAME, data,
 							&ugreen_cs201x_chip_info,
@@ -535,7 +554,7 @@ static void ugreen_cs201x_remove(struct platform_device *pdev)
 	struct ugreen_cs201x_data *data = platform_get_drvdata(pdev);
 	int i;
 
-	if (unload_pwm < 0 || unload_pwm > 255)
+	if (!pwm_valid(unload_pwm))
 		return;
 
 	mutex_lock(&data->lock);

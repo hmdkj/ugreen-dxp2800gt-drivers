@@ -39,11 +39,18 @@ TrueNAS 25.04 以降は `root` での SSH ログインが既定で無効なの�
 スクリプトは `bash` を付けて実行します（ホームディレクトリなどが `noexec` でマウントされていると、
 `./scripts/...` の直接実行は `Permission denied` になるためです）。
 
-1. **取得**: リポジトリを clone します。置き場所はどこでも構いません（次の手順でプールへコピーします）。
+1. **取得**: データプール上にリポジトリを clone します。ビルドした `.ko` もログもここに置き、
+   起動時のスクリプトもここから実行します。
+
+   置き場所には、専用のデータセット（UI: Datasets → Add Dataset、例: `system-tools`。共有は作らない）を
+   使ってください。次の場所は使えません。
+   - `/home/<user>` や `/root`: ブートプール上にあり、システム更新で作り直されます。`/home` は `noexec` でもあります。
+   - アプリ用のデータセット（`apps` など）: コンテナのデータ用なので、用途が違います。
 
    ```sh
-   git clone https://github.com/hmdkj/ugreen-dxp2800gt-drivers
-   cd ugreen-dxp2800gt-drivers
+   cd /mnt/<pool>/system-tools
+   git clone https://github.com/hmdkj/ugreen-dxp2800gt-drivers ugreen-cs201x
+   cd ugreen-cs201x
    ```
 
 2. **ビルド**: Docker コンテナ内で `.ko` を作ります。TrueNAS のルート FS は読み取り専用で、
@@ -53,34 +60,26 @@ TrueNAS 25.04 以降は `root` での SSH ログインが既定で無効なの�
    sudo bash ./scripts/build-in-docker.sh     # → build/$(uname -r)/ugreen-cs201x.ko
    ```
 
-3. **インストール**: ソース・スクリプト・`.ko` をプール上の `/mnt/<pool>/apps/ugreen-cs201x` にコピーします
-   （`/lib/modules` に置くとシステム更新で消えます）。以降はそこにあるものを使います。
-   引数で配置先を変えられます。
+3. **手動で一度実行**して動作を確かめます。
 
    ```sh
-   sudo bash ./scripts/install-truenas.sh [target-dir]
-   ```
-
-4. **手動で一度実行**して動作を確かめます。
-
-   ```sh
-   sudo bash /mnt/<pool>/apps/ugreen-cs201x/scripts/load-module.sh
+   sudo bash ./scripts/load-module.sh
    ```
 
    `dmesg` に `set both fans to pwm 153` と出て、ファンの音が下がれば成功です。失敗した場合は
-   同じ場所の `load-module.log` と `dmesg` を見てください。
+   リポジトリ直下の `load-module.log` と `dmesg` を見てください。
 
-5. **起動時に自動実行**する設定を UI で登録します。
+4. **起動時に自動実行**する設定を UI で登録します。
 
    ```
    System Settings → Advanced → Init/Shutdown Scripts → Add
      Description: ugreen fan and LED setup
      Type:        Command
-     Command:     /mnt/<pool>/apps/ugreen-cs201x/scripts/load-module.sh
+     Command:     /mnt/<pool>/system-tools/ugreen-cs201x/scripts/load-module.sh
      When:        Post Init
    ```
 
-6. **再起動して確認**します。`load-module.log` に新しい起動の記録があり、ファンが 100 % から下がっていれば完了です。
+5. **再起動して確認**します。`load-module.log` に新しい起動の記録があり、ファンが 100 % から下がっていれば完了です。
 
 ビルドや動作がうまくいかない場合は、`scripts/collect-hw-info.sh` で環境を確認できます。
 
@@ -113,7 +112,7 @@ TrueNAS 25.04 以降は `root` での SSH ログインが既定で無効なの�
 TrueNAS を更新するとカーネル ABI が変わるため、`.ko` を作り直す必要があります。
 
 ```sh
-cd /mnt/<pool>/apps/ugreen-cs201x
+cd /mnt/<pool>/system-tools/ugreen-cs201x
 bash ./scripts/build-in-docker.sh
 bash ./scripts/load-module.sh
 ```

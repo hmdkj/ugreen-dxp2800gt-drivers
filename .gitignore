@@ -53,3 +53,6 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# Logs written by scripts/load-module.sh
+*.log

@@ -9,11 +9,12 @@
 #
 #   System Settings -> Advanced -> Init/Shutdown Scripts -> Add
 #     Type: Command
-#     Command: /mnt/<pool>/apps/ugreen-cs201x/scripts/load-module.sh
+#     Command: /mnt/<pool>/system-tools/ugreen-cs201x/scripts/load-module.sh
 #     When: Post Init
 #
-# Everything it needs lives next to it, on a pool dataset, because the
-# TrueNAS root filesystem is replaced on every system update.
+# Everything it needs lives in the repository checkout this script is in, which
+# must be on a data pool dataset, because the TrueNAS root filesystem
+# (including /home) is replaced on every system update.
 #
 # Deliberately refuses to load a module built for a different kernel: after
 # a TrueNAS update you must rebuild (scripts/build-in-docker.sh) rather than
